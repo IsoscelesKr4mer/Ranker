@@ -4,12 +4,11 @@ import { motion } from 'framer-motion';
 import { Button, Card } from '@/components/ui';
 import { PRESET_LISTS } from '@/data/presets';
 import { List, GitCompareArrows, Trophy, ExternalLink } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import { Navbar } from '@/components/layout/Navbar';
 
 export default function Landing() {
   const navigate = useNavigate();
   const howItWorksRef = useRef<HTMLDivElement>(null);
-  const { user, status } = useAuthStore();
 
   const scrollToHowItWorks = () => {
     howItWorksRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -20,31 +19,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-bg-primary/80 backdrop-blur-xl border-b border-white/[0.07]">
-        <div className="max-w-4xl mx-auto px-8 sm:px-12 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-md shadow-violet-600/30">
-              R
-            </div>
-            <span
-              className="text-base font-bold text-white/90"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              Ranker
-            </span>
-          </div>
-          {status === 'authenticated' && user ? (
-            <Link to="/dashboard">
-              <Button variant="secondary" size="sm">Dashboard</Button>
-            </Link>
-          ) : status !== 'loading' ? (
-            <Link to="/auth">
-              <Button variant="secondary" size="sm">Sign In</Button>
-            </Link>
-          ) : null}
-        </div>
-      </header>
+      <Navbar />
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section className="relative flex items-center justify-center px-8 sm:px-12 pt-14 sm:pt-20 pb-14 sm:pb-18">
