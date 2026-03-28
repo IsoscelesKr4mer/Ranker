@@ -9,77 +9,62 @@ interface LetterboxdFilm {
 
 function parseFilmsFromHtml(html: string): LetterboxdFilm[] {
   const films: LetterboxdFilm[] = [];
-
-  // Actual Letterboxd structure (verified March 2025):
-  // <div class="poster film-poster">
-  //   <img src="https://a.ltrbxd.com/..." alt="Poster for Sinners (2025)" ...>
-  //   <a href="/film/sinners-2025/" class="frame" ...>
-  // </div>
-
-  // Strategy: Find all "Poster for X" alt texts, then find the nearest /film/slug/ link
-  const altRegex = /alt="Poster for ([^"]+)"[^>]*src="([^"]*)"/g;
   let match;
-  const posterEntries: { altText: string; posterUrl: string; position: number }[] = [];
 
-  while ((match = altRegex.exec(html)) !== null) {
-    posterEntries.push({
-      altText: match[1],
-      posterUrl: match[2],
-      position: match.index,
-    });
-  }
+  // Letterboxd server-side HTML uses React lazy-loading divs with data attributes:
+  // <div class="react-component" data-component-class="LazyPoster"
+  //   data-item-name="Sinners (2025)"
+  //   data-item-slug="sinners-2025"
+  //   data-item-link="/film/sinners-2025/"
+  //   data-film-id="1116600"
+  //   ...>
+  // Poster images are NOT in the server HTML — they're loaded client-side by JS.
 
-  // Also try src before alt (some variations)
-  if (posterEntries.length === 0) {
-    const altRegex2 = /src="([^"]*)"[^>]*alt="Poster for ([^"]+)"/g;
-    while ((match = altRegex2.exec(html)) !== null) {
-      posterEntries.push({
-        altText: match[2],
-        posterUrl: match[1],
-        position: match.index,
-      });
-    }
-  }
+  // Primary: extract data-item-name and data-item-slug from LazyPoster divs
+  const lazyPosterRegex = /data-component-class="LazyPoster"[^>]*data-item-name="([^"]+)"[^>]*data-item-slug="([^"]+)"/g;
+  while ((match = lazyPosterRegex.exec(html)) !== null) {
+    const itemName = match[1];
+    const slug = match[2];
 
-  for (const entry of posterEntries) {
-    const { altText, posterUrl: rawPosterUrl, position } = entry;
-
-    // Parse title and year from "Sinners (2025)"
-    const titleYearMatch = altText.match(/^(.+?)\s*\((\d{4})\)\s*$/);
-    const title = titleYearMatch ? titleYearMatch[1].trim() : altText.trim();
+    const titleYearMatch = itemName.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+    const title = titleYearMatch ? titleYearMatch[1].trim() : itemName.trim();
     const year = titleYearMatch ? titleYearMatch[2] : null;
 
-    // Find the nearest /film/slug/ link within 500 chars after the img
-    const nearby = html.substring(position, position + 500);
-    const slugMatch = nearby.match(/href="\/film\/([^"\/]+)\/"/);
-    const slug = slugMatch ? slugMatch[1] : title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
-    // Upgrade poster to larger size
-    let posterUrl: string | null = rawPosterUrl || null;
-    if (posterUrl && posterUrl.includes('ltrbxd.com')) {
-      posterUrl = posterUrl
-        .replace(/-0-\d+-0-\d+-crop/, '-0-500-0-750-crop');
-    }
-
     if (title && !films.some(f => f.slug === slug)) {
-      films.push({ slug, title, posterUrl, year });
+      films.push({ slug, title, posterUrl: null, year });
     }
   }
 
-  // Fallback: just extract /film/slug/ links if no poster entries found
+  // Fallback: try data-item-slug before data-item-name (attribute order may vary)
   if (films.length === 0) {
-    const linkRegex = /href="\/film\/([^"\/]+)\/"/g;
+    const altOrderRegex = /data-item-slug="([^"]+)"[^>]*data-item-name="([^"]+)"/g;
+    while ((match = altOrderRegex.exec(html)) !== null) {
+      const slug = match[1];
+      const itemName = match[2];
+
+      const titleYearMatch = itemName.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+      const title = titleYearMatch ? titleYearMatch[1].trim() : itemName.trim();
+      const year = titleYearMatch ? titleYearMatch[2] : null;
+
+      if (title && !films.some(f => f.slug === slug)) {
+        films.push({ slug, title, posterUrl: null, year });
+      }
+    }
+  }
+
+  // Fallback 2: extract from poster img alt + data-target-link
+  if (films.length === 0) {
+    const targetLinkRegex = /data-target-link="\/film\/([^"\/]+)\/"/g;
     const seenSlugs = new Set<string>();
-    while ((match = linkRegex.exec(html)) !== null) {
+    while ((match = targetLinkRegex.exec(html)) !== null) {
       const slug = match[1];
       if (!seenSlugs.has(slug)) {
         seenSlugs.add(slug);
-        // Also try to find a data-original-title near this link
-        const nearbyContext = html.substring(Math.max(0, match.index - 200), match.index + 200);
-        const titleMatch = nearbyContext.match(/data-original-title="([^"]+)"/);
-        const rawTitle = titleMatch
-          ? titleMatch[1].replace(/\s*★.*$/, '').trim()
-          : slug.replace(/-\d{4}$/, '').replace(/-/g, ' ');
+        // Look for data-item-name or alt text nearby
+        const nearby = html.substring(Math.max(0, match.index - 500), match.index + 200);
+        const nameMatch = nearby.match(/data-item-name="([^"]+)"/);
+        const altMatch = nearby.match(/alt="([^"]+)"/);
+        const rawTitle = nameMatch ? nameMatch[1] : altMatch ? altMatch[1] : slug.replace(/-\d{4}$/, '').replace(/-/g, ' ');
 
         const titleYearMatch = rawTitle.match(/^(.+?)\s*\((\d{4})\)\s*$/);
         const title = titleYearMatch
@@ -173,9 +158,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         count: 0,
         debug: {
           htmlLength: html.length,
+          hasLazyPoster: html.includes('LazyPoster'),
+          hasDataItemName: html.includes('data-item-name'),
+          hasDataTargetLink: html.includes('data-target-link'),
           hasFilmPoster: html.includes('film-poster'),
-          hasPosterFor: html.includes('Poster for'),
-          hasFilmLink: html.includes('/film/'),
           snippet: htmlSnippet,
         },
       });
