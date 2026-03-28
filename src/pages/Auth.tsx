@@ -17,7 +17,13 @@ export default function Auth() {
   // Redirect if already authenticated
   useEffect(() => {
     if (status === 'authenticated' && user) {
-      navigate('/dashboard');
+      // If there are pending results from before auth, go back to results page
+      const pendingResults = sessionStorage.getItem('pendingResults');
+      if (pendingResults) {
+        navigate('/results');
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [status, user, navigate]);
 

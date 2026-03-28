@@ -26,7 +26,21 @@ export default function Results() {
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const state = location.state as ResultsState | null;
+  // Try location state first, then fall back to sessionStorage (for post-auth redirects)
+  const locationState = location.state as ResultsState | null;
+  const state: ResultsState | null = locationState?.result
+    ? locationState
+    : (() => {
+        try {
+          const pending = sessionStorage.getItem('pendingResults');
+          if (pending) {
+            sessionStorage.removeItem('pendingResults');
+            const parsed = JSON.parse(pending);
+            if (parsed?.result) return parsed as ResultsState;
+          }
+        } catch { /* ignore */ }
+        return null;
+      })();
 
   if (!state || !state.result) {
     return (
@@ -63,9 +77,15 @@ export default function Results() {
   const third = result[2];
   const rest = result.slice(3);
 
+  const saveAndRedirectToAuth = () => {
+    // Save results to sessionStorage so they survive the OAuth redirect
+    sessionStorage.setItem('pendingResults', JSON.stringify(state));
+    navigate('/auth');
+  };
+
   const handleShareResults = async () => {
     if (!user) {
-      navigate('/auth');
+      saveAndRedirectToAuth();
       return;
     }
 
@@ -108,7 +128,7 @@ export default function Results() {
 
   const handleSaveToProfile = async () => {
     if (!user) {
-      navigate('/auth');
+      saveAndRedirectToAuth();
       return;
     }
 
