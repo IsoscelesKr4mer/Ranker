@@ -424,34 +424,34 @@ export default function CreateList() {
                               ? result.cover
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             return (
-                              <motion.button
-                                key={result.id}
-                                onClick={() => handleAddSearchResult(result)}
-                                className="group relative rounded-lg overflow-hidden aspect-[2/3]"
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                              >
-                                {imageUrl ? (
-                                  <img
-                                    src={imageUrl}
-                                    alt={displayTitle}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
-                                    {isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
-                                  </div>
-                                )}
-                                <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Plus className="w-6 h-6 text-white" />
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                                  <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
-                                  {displayYear && (
-                                    <p className="text-xs text-white/50">{displayYear}</p>
+                              <div key={result.id} className="relative w-full" style={{ paddingBottom: '150%' }}>
+                                <button
+                                  onClick={() => handleAddSearchResult(result)}
+                                  className="absolute inset-0 rounded-lg overflow-hidden active:scale-95 transition-transform touch-manipulation"
+                                >
+                                  {imageUrl ? (
+                                    <img
+                                      src={imageUrl}
+                                      alt={displayTitle}
+                                      className="w-full h-full object-cover pointer-events-none"
+                                      draggable={false}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
+                                      {isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
+                                    </div>
                                   )}
-                                </div>
-                              </motion.button>
+                                  <div className="absolute inset-0 bg-black/0 active:bg-black/40 transition-colors flex items-center justify-center">
+                                    <Plus className="w-6 h-6 text-white opacity-0 active:opacity-100 transition-opacity" />
+                                  </div>
+                                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                                    <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
+                                    {displayYear && (
+                                      <p className="text-xs text-white/50">{displayYear}</p>
+                                    )}
+                                  </div>
+                                </button>
+                              </div>
                             );
                           })
                         )}
