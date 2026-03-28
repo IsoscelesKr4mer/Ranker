@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, ThumbsUp, Zap, Users } from 'lucide-react';
+import { Plus, Zap, Users } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { getCommunityLists } from '@/lib/database';
