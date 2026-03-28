@@ -350,7 +350,7 @@ export default function Ranking() {
             {/* Item list */}
             <div className="space-y-1.5 max-h-[28rem] overflow-y-auto rounded-xl">
               <AnimatePresence mode="popLayout">
-                {filteredReviewItems.map((item, index) => (
+                {filteredReviewItems.map((item) => (
                   <motion.div
                     key={item.id}
                     layout

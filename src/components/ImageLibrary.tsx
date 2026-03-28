@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, Image as ImageIcon, Check, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Upload, X, Check, Loader2 } from 'lucide-react';
 import { uploadListImage } from '@/lib/database';
 
 export interface LibraryImage {

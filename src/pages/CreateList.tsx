@@ -567,7 +567,7 @@ export default function CreateList() {
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   <AnimatePresence mode="popLayout">
                     {items.length > 0 ? (
-                      items.map((item, index) => (
+                      items.map((item) => (
                         <motion.div
                           key={item.id}
                           layout
