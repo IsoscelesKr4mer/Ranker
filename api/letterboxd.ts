@@ -10,63 +10,93 @@ interface LetterboxdFilm {
 function parseFilmsFromHtml(html: string): LetterboxdFilm[] {
   const films: LetterboxdFilm[] = [];
 
-  // Method 1: Extract from data-film-slug attributes and img alt text
-  // Pattern: <div ... data-film-slug="film-name" ... > ... <img ... alt="Film Title" src="poster-url" ...>
-  const posterRegex = /data-film-slug="([^"]+)"[^>]*>[\s\S]*?<img[^>]*alt="([^"]*)"[^>]*(?:src|data-src)="([^"]*)"/g;
+  // Current Letterboxd structure (2025):
+  // <li class="posteritem ...">
+  //   <div class="poster film-poster">
+  //     <a href="/film/sinners-2025/">
+  //       <img alt="Poster for Sinners (2025)" src="https://a.ltrbxd.com/resized/film-poster/..." />
+  //     </a>
+  //   </div>
+  // </li>
+
+  // Method 1: Extract from img alt="Poster for Title (Year)" + link href="/film/slug/"
+  const posterRegex = /href="\/film\/([^"\/]+)\/"[^>]*>[\s\S]*?<img[^>]*alt="(?:Poster for )?([^"]+)"[^>]*src="([^"]+)"/g;
   let match;
   while ((match = posterRegex.exec(html)) !== null) {
     const slug = match[1];
-    const title = match[2];
+    const altText = match[2];
     let posterUrl: string | null = match[3];
 
-    // Upgrade poster URL to larger size
+    // Parse title and year from alt text like "Sinners (2025)"
+    const titleYearMatch = altText.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+    const title = titleYearMatch ? titleYearMatch[1].trim() : altText.trim();
+    const year = titleYearMatch ? titleYearMatch[2] : null;
+
+    // Upgrade poster to larger size
     if (posterUrl && posterUrl.includes('ltrbxd.com')) {
-      posterUrl = posterUrl.replace(/\/[0-9]+x[0-9]+\//, '/500x750/');
+      posterUrl = posterUrl
+        .replace(/-0-\d+-0-\d+-crop/, '-0-500-0-750-crop')
+        .replace(/\/\d+x\d+\//, '/500x750/');
     }
 
     if (title && !films.some(f => f.slug === slug)) {
-      films.push({ slug, title, posterUrl: posterUrl || null, year: null });
+      films.push({ slug, title, posterUrl, year });
     }
   }
 
-  // Method 2: data-film-slug with separate image lookup
+  // Method 2: Try reverse order (img before link) - some page layouts differ
   if (films.length === 0) {
-    const slugRegex = /data-film-slug="([^"]+)"/g;
-    const slugs: string[] = [];
-    while ((match = slugRegex.exec(html)) !== null) {
-      if (!slugs.includes(match[1])) {
-        slugs.push(match[1]);
+    const altRegex = /<img[^>]*alt="(?:Poster for )?([^"]+)"[^>]*src="([^"]+)"[\s\S]*?href="\/film\/([^"\/]+)\/"/g;
+    while ((match = altRegex.exec(html)) !== null) {
+      const altText = match[1];
+      let posterUrl: string | null = match[2];
+      const slug = match[3];
+
+      const titleYearMatch = altText.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+      const title = titleYearMatch ? titleYearMatch[1].trim() : altText.trim();
+      const year = titleYearMatch ? titleYearMatch[2] : null;
+
+      if (posterUrl && posterUrl.includes('ltrbxd.com')) {
+        posterUrl = posterUrl
+          .replace(/-0-\d+-0-\d+-crop/, '-0-500-0-750-crop')
+          .replace(/\/\d+x\d+\//, '/500x750/');
+      }
+
+      if (title && !films.some(f => f.slug === slug)) {
+        films.push({ slug, title, posterUrl, year });
       }
     }
+  }
 
-    // Try to find titles from alt attributes or data-film-name
-    for (const slug of slugs) {
-      // Look for data-film-name attribute
-      const nameRegex = new RegExp(`data-film-slug="${slug}"[^>]*data-film-name="([^"]*)"`, 'i');
-      const nameMatch = html.match(nameRegex);
-
-      // Also try finding the alt text near this slug
-      const contextRegex = new RegExp(`data-film-slug="${slug}"[\\s\\S]{0,500}?alt="([^"]*)"`, 'i');
-      const contextMatch = html.match(contextRegex);
-
-      const title = nameMatch?.[1] || contextMatch?.[1] || slug.replace(/-/g, ' ');
+  // Method 3: Just get all "Poster for X" alt texts as a fallback
+  if (films.length === 0) {
+    const simpleAltRegex = /alt="Poster for ([^"]+)"/g;
+    let idx = 0;
+    while ((match = simpleAltRegex.exec(html)) !== null) {
+      const altText = match[1];
+      const titleYearMatch = altText.match(/^(.+?)\s*\((\d{4})\)\s*$/);
+      const title = titleYearMatch ? titleYearMatch[1].trim() : altText.trim();
+      const year = titleYearMatch ? titleYearMatch[2] : null;
 
       films.push({
-        slug,
-        title: title.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
+        slug: `film-${idx++}`,
+        title,
         posterUrl: null,
-        year: null,
+        year,
       });
     }
   }
 
-  // Method 3: Parse from list detail/headline structure
+  // Method 4: Parse from href="/film/slug/" links as absolute fallback
   if (films.length === 0) {
-    const detailRegex = /<h\d[^>]*>\s*<a[^>]*href="\/film\/([^/"]+)\/"[^>]*>([^<]+)<\/a>/g;
-    while ((match = detailRegex.exec(html)) !== null) {
+    const linkRegex = /href="\/film\/([^"\/]+)\/"/g;
+    const seenSlugs = new Set<string>();
+    while ((match = linkRegex.exec(html)) !== null) {
       const slug = match[1];
-      const title = match[2].trim();
-      if (title && !films.some(f => f.slug === slug)) {
+      if (!seenSlugs.has(slug)) {
+        seenSlugs.add(slug);
+        const title = slug.replace(/-\d{4}$/, '').replace(/-/g, ' ')
+          .split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         films.push({ slug, title, posterUrl: null, year: null });
       }
     }
@@ -98,7 +128,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const maxPages = 10;
 
     while (pageNum <= maxPages) {
-      // Ensure URL ends with /
       const baseUrl = url.replace(/\/?$/, '/');
       const pageUrl = pageNum === 1
         ? baseUrl
@@ -116,7 +145,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (pageNum === 1) {
           return res.status(response.status).json({
             error: `Failed to fetch Letterboxd page: ${response.status}`,
-            debug: `URL: ${pageUrl}`,
           });
         }
         break;
@@ -126,13 +154,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const films = parseFilmsFromHtml(html);
 
       if (films.length === 0 && pageNum > 1) {
-        break; // No more films on this page
+        break;
       }
 
       allFilms.push(...films);
 
-      // Check if there's a next page
-      if (!html.includes('class="next"') && !html.includes('"next"') && !html.includes('paginate-next')) {
+      // Check for next page link
+      if (!html.includes('class="next"') && !html.includes('paginate-next')) {
         break;
       }
 
