@@ -6,6 +6,7 @@ import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
+import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
 import { saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import { ImageLibrary } from '@/components/ImageLibrary';
@@ -28,6 +29,7 @@ export default function CreateList() {
   // Form state
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('custom');
+  const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
   const [isCommunity, setIsCommunity] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -69,6 +71,9 @@ export default function CreateList() {
         } else if (selectedCategory === 'tv') {
           const { shows } = await searchTV(searchQuery);
           setSearchResults(shows || []);
+        } else if (selectedCategory === 'music') {
+          const { results } = await searchMusic(searchQuery, musicSearchType);
+          setSearchResults(results || []);
         } else {
           const { movies } = await searchMovies(searchQuery);
           setSearchResults(movies || []);
@@ -88,7 +93,7 @@ export default function CreateList() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, musicSearchType]);
 
   const handleAddSearchResult = useCallback((result: any) => {
     let rankItem;
@@ -96,6 +101,8 @@ export default function CreateList() {
       rankItem = igdbToRankItem(result);
     } else if (selectedCategory === 'tv') {
       rankItem = tmdbTVToRankItem(result);
+    } else if (selectedCategory === 'music') {
+      rankItem = deezerToRankItem(result);
     } else {
       rankItem = tmdbToRankItem(result);
     }
@@ -322,7 +329,7 @@ export default function CreateList() {
     }
   };
 
-  const isSearchableCategory = selectedCategory === 'movies' || selectedCategory === 'tv' || selectedCategory === 'games';
+  const isSearchableCategory = selectedCategory === 'movies' || selectedCategory === 'tv' || selectedCategory === 'games' || selectedCategory === 'music';
   const canStartRanking = items.length >= 3 && listTitle.trim();
 
   return (
@@ -382,12 +389,34 @@ export default function CreateList() {
             {isSearchableCategory && (
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-white/60">Search {selectedCategory === 'movies' ? 'Movies' : selectedCategory === 'tv' ? 'TV Shows' : 'Games'}</label>
+                  <label className="block text-sm font-medium text-white/60">
+                    Search {selectedCategory === 'movies' ? 'Movies' : selectedCategory === 'tv' ? 'TV Shows' : selectedCategory === 'games' ? 'Games' : musicSearchType === 'album' ? 'Albums' : musicSearchType === 'artist' ? 'Artists' : 'Songs'}
+                  </label>
+
+                  {/* Music sub-type picker */}
+                  {selectedCategory === 'music' && (
+                    <div className="flex gap-1.5">
+                      {([['track', 'Songs'], ['album', 'Albums'], ['artist', 'Artists']] as const).map(([type, label]) => (
+                        <button
+                          key={type}
+                          onClick={() => { setMusicSearchType(type); setSearchQuery(''); setSearchResults([]); }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            musicSearchType === type
+                              ? 'bg-violet-600 text-white'
+                              : 'bg-white/[0.05] text-white/50 hover:text-white/70 hover:bg-white/[0.08]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="relative">
                     <Search className="absolute left-4 top-3.5 w-4 h-4 text-white/25 pointer-events-none" />
                     <Input
                       type="text"
-                      placeholder={`Search ${selectedCategory === 'movies' ? 'movies' : selectedCategory === 'tv' ? 'TV shows' : 'games'}...`}
+                      placeholder={`Search ${selectedCategory === 'movies' ? 'movies' : selectedCategory === 'tv' ? 'TV shows' : selectedCategory === 'games' ? 'games' : musicSearchType === 'album' ? 'albums' : musicSearchType === 'artist' ? 'artists' : 'songs'}...`}
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       className="pl-12"
@@ -416,15 +445,18 @@ export default function CreateList() {
                         ) : (
                           searchResults.map(result => {
                             const isGame = selectedCategory === 'games';
-                            const displayTitle = isGame ? result.name : (result.title || result.name);
-                            const displayYear = isGame
-                              ? result.releaseDate
+                            const isMusic = selectedCategory === 'music';
+                            const displayTitle = isMusic ? result.title
+                              : isGame ? result.name
+                              : (result.title || result.name);
+                            const displayYear = isMusic ? result.artist
+                              : isGame ? result.releaseDate
                               : (result.release_date || result.first_air_date)?.slice(0, 4);
-                            const imageUrl = isGame
-                              ? result.cover
+                            const imageUrl = isMusic ? result.imageUrl
+                              : isGame ? result.cover
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             return (
-                              <div key={result.id} className="relative w-full" style={{ paddingBottom: '150%' }}>
+                              <div key={result.id} className="relative w-full" style={{ paddingBottom: isMusic ? '100%' : '150%' }}>
                                 <motion.button
                                   onClick={() => handleAddSearchResult(result)}
                                   className="group absolute inset-0 rounded-lg overflow-hidden"
@@ -439,7 +471,7 @@ export default function CreateList() {
                                     />
                                   ) : (
                                     <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
-                                      {isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
+                                      {isMusic ? <Music className="w-5 h-5 text-white/30" /> : isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
                                     </div>
                                   )}
                                   <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
