@@ -18,6 +18,8 @@ export default function Browse() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [letterboxdUrl, setLetterboxdUrl] = useState('');
   const [urlValidation, setUrlValidation] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [saveAsList, setSaveAsList] = useState(false);
+  const [listTitle, setListTitle] = useState('');
 
   const filteredPresets = useMemo(() => {
     return PRESET_LISTS.filter(list => {
@@ -44,7 +46,12 @@ export default function Browse() {
 
   const handleImportLetterboxd = () => {
     if (urlValidation === 'valid') {
-      navigate(`/ranking/letterboxd?url=${encodeURIComponent(letterboxdUrl)}`);
+      const params = new URLSearchParams({ url: letterboxdUrl });
+      if (saveAsList) {
+        params.set('saveList', 'true');
+        if (listTitle.trim()) params.set('listTitle', listTitle.trim());
+      }
+      navigate(`/ranking/letterboxd?${params.toString()}`);
     }
   };
 
@@ -298,8 +305,34 @@ export default function Browse() {
                     <motion.div
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
+                      className="space-y-3 mt-2"
                     >
-                      <Button onClick={handleImportLetterboxd} variant="primary" fullWidth className="mt-2">
+                      {/* Save as community list option */}
+                      <label className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] cursor-pointer hover:bg-white/[0.06] transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={saveAsList}
+                          onChange={e => setSaveAsList(e.target.checked)}
+                          className="w-4 h-4 rounded accent-violet-500"
+                        />
+                        <span className="text-sm text-white/70">Save as a community list</span>
+                      </label>
+
+                      {saveAsList && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                        >
+                          <Input
+                            type="text"
+                            placeholder="List title (e.g. Best of 2025)"
+                            value={listTitle}
+                            onChange={e => setListTitle(e.target.value)}
+                          />
+                        </motion.div>
+                      )}
+
+                      <Button onClick={handleImportLetterboxd} variant="primary" fullWidth>
                         <Import className="w-4 h-4" />
                         Import & Start Ranking
                       </Button>

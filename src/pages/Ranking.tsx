@@ -7,7 +7,7 @@ import { useRanking } from '@/hooks/useRanking';
 import { getPresetById } from '@/data/presets';
 import { importLetterboxdList } from '@/lib/letterboxd';
 import { searchMovies } from '@/lib/tmdb';
-import { saveRankingSession, updateRankingSession, completeRankingSession } from '@/lib/database';
+import { saveRankingSession, updateRankingSession, completeRankingSession, saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
 import { Undo2, X, ArrowLeft, Trophy, Search, Play } from 'lucide-react';
@@ -145,8 +145,21 @@ export default function Ranking() {
           // Try to enhance items with TMDb posters for better image quality
           const enhanced = await enhanceWithTmdb(imported);
           items = enhanced;
-          title = 'Letterboxd Import';
+          title = searchParams.get('listTitle') || 'Letterboxd Import';
           category = 'movies';
+
+          // Save as community list if requested
+          if (searchParams.get('saveList') === 'true') {
+            saveList({
+              title,
+              category: 'movies',
+              source: 'letterboxd',
+              items: enhanced,
+              isPublic: true,
+              isCommunity: true,
+              coverImageUrl: enhanced[0]?.imageUrl || undefined,
+            }).catch(err => console.error('Failed to save list:', err));
+          }
         } catch (err) {
           console.error('Letterboxd import failed:', err);
           setImportError('Failed to import from Letterboxd. Please check the URL and try again.');
