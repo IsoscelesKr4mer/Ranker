@@ -29,6 +29,7 @@ export default function CreateList() {
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('custom');
   const [isCommunity, setIsCommunity] = useState(false);
+  const [tagsInput, setTagsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -278,6 +279,7 @@ export default function CreateList() {
     if (user) {
       setIsSaving(true);
       try {
+        const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
         const result = await saveList({
           title: listTitle,
           category: selectedCategory,
@@ -285,6 +287,7 @@ export default function CreateList() {
           items,
           isCommunity,
           isPublic: true,
+          tags,
         });
 
         if ('error' in result) {
@@ -664,6 +667,18 @@ export default function CreateList() {
                     )}
                   </AnimatePresence>
                 </div>
+              </Card>
+
+              {/* Tags */}
+              <Card padding="lg" className="space-y-3">
+                <label className="block text-sm font-medium text-white/60">Tags <span className="text-white/30 font-normal">(optional)</span></label>
+                <Input
+                  type="text"
+                  placeholder="e.g., apex legends, characters, battle royale"
+                  value={tagsInput}
+                  onChange={e => setTagsInput(e.target.value)}
+                />
+                <p className="text-xs text-white/35">Separate tags with commas. Helps others find your list.</p>
               </Card>
 
               {/* Submit to Community Toggle */}

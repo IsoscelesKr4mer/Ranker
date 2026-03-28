@@ -12,6 +12,7 @@ export async function saveList(params: {
   isPublic?: boolean;
   isCommunity?: boolean;
   coverImageUrl?: string;
+  tags?: string[];
 }): Promise<{ listId: string } | { error: string }> {
   if (!isSupabaseConfigured()) return { error: 'Database not configured' };
 
@@ -29,6 +30,7 @@ export async function saveList(params: {
       source: params.source,
       is_public: params.isPublic ?? false,
       is_community: params.isCommunity ?? false,
+      tags: params.tags && params.tags.length > 0 ? params.tags : null,
       item_count: params.items.length,
       cover_image_url: params.coverImageUrl || params.items[0]?.imageUrl,
     })

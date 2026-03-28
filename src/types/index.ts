@@ -15,6 +15,7 @@ export interface RankList {
   source: 'preset' | 'letterboxd' | 'tmdb' | 'custom' | 'community';
   items: RankItem[];
   coverImageUrl?: string;
+  tags?: string[];
   itemCount: number;
   creatorId?: string;
   creatorName?: string;
