@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useRanking } from '@/hooks/useRanking';
 import { getPresetById } from '@/data/presets';
 import { importLetterboxdList } from '@/lib/letterboxd';
-import { searchMovies, tmdbToRankItem } from '@/lib/tmdb';
+import { searchMovies } from '@/lib/tmdb';
 import { saveRankingSession, updateRankingSession, completeRankingSession } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
