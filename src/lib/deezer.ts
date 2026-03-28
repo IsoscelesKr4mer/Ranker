@@ -42,7 +42,7 @@ export function deezerToRankItem(result: DeezerResult): RankItem {
   return {
     id: `deezer-${result.type}-${result.id}`,
     title: result.title,
-    imageUrl: result.imageUrl || undefined,
+    imageUrl: result.imageUrl || null,
     subtitle,
     metadata: {
       deezerId: result.id,
