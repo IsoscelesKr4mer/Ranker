@@ -5,6 +5,7 @@ import { Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen, AlertCircle
 import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
+import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import { ImageLibrary } from '@/components/ImageLibrary';
@@ -61,7 +62,10 @@ export default function CreateList() {
     const performSearch = async () => {
       setIsSearching(true);
       try {
-        if (selectedCategory === 'tv') {
+        if (selectedCategory === 'games') {
+          const { games } = await searchGames(searchQuery);
+          setSearchResults(games || []);
+        } else if (selectedCategory === 'tv') {
           const { shows } = await searchTV(searchQuery);
           setSearchResults(shows || []);
         } else {
@@ -86,9 +90,14 @@ export default function CreateList() {
   }, [searchQuery, selectedCategory]);
 
   const handleAddSearchResult = useCallback((result: any) => {
-    const rankItem = selectedCategory === 'tv'
-      ? tmdbTVToRankItem(result)
-      : tmdbToRankItem(result);
+    let rankItem;
+    if (selectedCategory === 'games') {
+      rankItem = igdbToRankItem(result);
+    } else if (selectedCategory === 'tv') {
+      rankItem = tmdbTVToRankItem(result);
+    } else {
+      rankItem = tmdbToRankItem(result);
+    }
     setItems(prev => [...prev, rankItem]);
     setSearchQuery('');
     setSearchResults([]);
@@ -310,7 +319,7 @@ export default function CreateList() {
     }
   };
 
-  const isTmdbCategory = selectedCategory === 'movies' || selectedCategory === 'tv';
+  const isSearchableCategory = selectedCategory === 'movies' || selectedCategory === 'tv' || selectedCategory === 'games';
   const canStartRanking = items.length >= 3 && listTitle.trim();
 
   return (
@@ -367,15 +376,15 @@ export default function CreateList() {
             </Card>
 
             {/* TMDb Search (Movies/TV only) */}
-            {isTmdbCategory && (
+            {isSearchableCategory && (
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-white/60">Search {selectedCategory === 'movies' ? 'Movies' : 'TV Shows'}</label>
+                  <label className="block text-sm font-medium text-white/60">Search {selectedCategory === 'movies' ? 'Movies' : selectedCategory === 'tv' ? 'TV Shows' : 'Games'}</label>
                   <div className="relative">
                     <Search className="absolute left-4 top-3.5 w-4 h-4 text-white/25 pointer-events-none" />
                     <Input
                       type="text"
-                      placeholder={`Search ${selectedCategory === 'movies' ? 'movies' : 'TV shows'}...`}
+                      placeholder={`Search ${selectedCategory === 'movies' ? 'movies' : selectedCategory === 'tv' ? 'TV shows' : 'games'}...`}
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       className="pl-12"
@@ -403,8 +412,14 @@ export default function CreateList() {
                           </div>
                         ) : (
                           searchResults.map(result => {
-                            const displayTitle = result.title || result.name;
-                            const displayDate = result.release_date || result.first_air_date;
+                            const isGame = selectedCategory === 'games';
+                            const displayTitle = isGame ? result.name : (result.title || result.name);
+                            const displayYear = isGame
+                              ? result.releaseDate
+                              : (result.release_date || result.first_air_date)?.slice(0, 4);
+                            const imageUrl = isGame
+                              ? result.cover
+                              : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             return (
                               <motion.button
                                 key={result.id}
@@ -413,15 +428,15 @@ export default function CreateList() {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                               >
-                                {result.poster_path ? (
+                                {imageUrl ? (
                                   <img
-                                    src={`https://image.tmdb.org/t/p/w200${result.poster_path}`}
+                                    src={imageUrl}
                                     alt={displayTitle}
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
                                   <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
-                                    <Film className="w-5 h-5 text-white/30" />
+                                    {isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
                                   </div>
                                 )}
                                 <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -429,8 +444,8 @@ export default function CreateList() {
                                 </div>
                                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                                   <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
-                                  {displayDate && (
-                                    <p className="text-xs text-white/50">{displayDate.slice(0, 4)}</p>
+                                  {displayYear && (
+                                    <p className="text-xs text-white/50">{displayYear}</p>
                                   )}
                                 </div>
                               </motion.button>
