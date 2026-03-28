@@ -94,7 +94,7 @@ export default function Results() {
       setSaveError(null);
 
       const response = await saveRankingResult({
-        sessionId: state?.sessionId || `session-${Date.now()}`,
+        sessionId: state?.sessionId || crypto.randomUUID(),
         listTitle,
         results: result,
         comparisonsMade: comparisons,
@@ -137,7 +137,7 @@ export default function Results() {
       setSaveError(null);
 
       const response = await saveRankingResult({
-        sessionId: state?.sessionId || `session-${Date.now()}`,
+        sessionId: state?.sessionId || crypto.randomUUID(),
         listTitle,
         results: result,
         comparisonsMade: comparisons,
