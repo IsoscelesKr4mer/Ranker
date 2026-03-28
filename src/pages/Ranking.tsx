@@ -7,7 +7,7 @@ import { useRanking } from '@/hooks/useRanking';
 import { getPresetById } from '@/data/presets';
 import { importLetterboxdList } from '@/lib/letterboxd';
 import { searchMovies } from '@/lib/tmdb';
-import { saveRankingSession, updateRankingSession, completeRankingSession, saveList } from '@/lib/database';
+import { saveRankingSession, updateRankingSession, completeRankingSession, saveList, getListById } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
 import { Undo2, X, ArrowLeft, Trophy, Search, Play } from 'lucide-react';
@@ -33,6 +33,13 @@ const COMPARISON_PROMPTS = {
     "Binge night. What's your pick?",
     "Only one series remains. Which survives?",
     "Which one do you press play on?",
+  ],
+  music: [
+    "You can only listen to one forever. Which?",
+    "Road trip playlist — which gets the aux?",
+    "One gets erased from history. Which do you save?",
+    "Which one do you put on repeat?",
+    "Desert island pick. Which one?",
   ],
   default: [
     "Which do you prefer?",
@@ -129,8 +136,17 @@ export default function Ranking() {
           category = preset.category.toLowerCase();
           source = 'preset';
         } else {
-          navigate('/');
-          return;
+          // Try fetching from database (community lists)
+          const dbList = await getListById(presetId);
+          if (dbList) {
+            items = dbList.items;
+            title = dbList.title;
+            category = dbList.category.toLowerCase();
+            source = 'preset';
+          } else {
+            navigate('/');
+            return;
+          }
         }
       } else if (searchParams.get('url')) {
         source = 'letterboxd';

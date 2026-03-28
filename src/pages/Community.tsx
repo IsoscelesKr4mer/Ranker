@@ -1,29 +1,30 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, ThumbsUp, Zap } from 'lucide-react';
+import { Plus, ThumbsUp, Zap, Users } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
-import { PRESET_LISTS } from '@/data/presets';
+import { getCommunityLists } from '@/lib/database';
+import type { RankList } from '@/types';
 
 const CATEGORIES = ['All', 'Movies', 'TV', 'Games', 'Music', 'Other'];
 
 export default function Community() {
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [lists, setLists] = useState<RankList[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Filter lists based on category
+  useEffect(() => {
+    getCommunityLists().then((data) => {
+      setLists(data);
+      setLoading(false);
+    });
+  }, []);
+
   const filteredLists = useMemo(() => {
-    if (selectedCategory === 'All') {
-      return PRESET_LISTS;
-    }
-    return PRESET_LISTS.filter(list => list.category === selectedCategory);
-  }, [selectedCategory]);
-
-  // Generate random upvote count for demo
-  const getUpvotes = (id: string) => {
-    const seed = id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return Math.floor((seed % 500) + 50);
-  };
+    if (selectedCategory === 'All') return lists;
+    return lists.filter(list => list.category === selectedCategory);
+  }, [lists, selectedCategory]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -118,105 +119,128 @@ export default function Community() {
           </div>
         </motion.div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-violet-400 animate-pulse" />
+              <span className="text-sm text-white/30">Loading community lists...</span>
+            </div>
+          </div>
+        )}
+
         {/* Community Lists Grid */}
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          {filteredLists.map(list => (
-            <motion.div key={list.id} variants={itemVariants}>
-              <Card hover className="h-full flex flex-col gap-4 group cursor-pointer overflow-hidden">
-                {/* 2x2 Item Grid */}
-                <div className="grid grid-cols-2 gap-2 aspect-square bg-white/[0.02] rounded-lg p-2 overflow-hidden">
-                  {list.items.slice(0, 4).map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-white/[0.05] rounded-md overflow-hidden"
-                    >
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
-                          <span className="text-xs text-white/30 text-center px-1">
-                            {item.title.substring(0, 10)}
-                          </span>
-                        </div>
-                      )}
+        {!loading && filteredLists.length > 0 && (
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {filteredLists.map(list => (
+              <motion.div key={list.id} variants={itemVariants}>
+                <Card hover className="h-full flex flex-col gap-4 group cursor-pointer overflow-hidden">
+                  {/* 2x2 Item Grid */}
+                  <div className="grid grid-cols-2 gap-2 aspect-square bg-white/[0.02] rounded-lg p-2 overflow-hidden">
+                    {list.items.slice(0, 4).map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-white/[0.05] rounded-md overflow-hidden"
+                      >
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
+                            <span className="text-xs text-white/30 text-center px-1">
+                              {item.title.substring(0, 10)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* List Info */}
+                  <div className="space-y-3 flex-1 flex flex-col">
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-white/90 line-clamp-2 group-hover:text-violet-300 transition-colors">
+                        {list.title}
+                      </h3>
+                      <p className="text-xs text-white/50">
+                        by {list.creatorName || 'Community Member'}
+                      </p>
                     </div>
-                  ))}
-                </div>
 
-                {/* List Info */}
-                <div className="space-y-3 flex-1 flex flex-col">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-white/90 line-clamp-2 group-hover:text-violet-300 transition-colors">
-                      {list.title}
-                    </h3>
-                    <p className="text-xs text-white/50">
-                      by Ranker Team
-                    </p>
-                  </div>
-
-                  {/* Stats Row */}
-                  <div className="flex items-center gap-3 text-xs text-white/50 py-2 border-y border-white/[0.06]">
-                    <div className="flex items-center gap-1">
-                      <ThumbsUp className="w-3 h-3" />
-                      <span>{getUpvotes(list.id)} votes</span>
+                    {/* Stats Row */}
+                    <div className="flex items-center gap-3 text-xs text-white/50 py-2 border-y border-white/[0.06]">
+                      <span>{list.itemCount} items</span>
+                      <span>•</span>
+                      <span>{list.category}</span>
                     </div>
-                    <span>•</span>
-                    <span>{list.itemCount} items</span>
+
+                    {/* Badges and Button */}
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-2">
+                      <span className="inline-block px-2.5 py-1 bg-violet-600/20 border border-violet-500/30 rounded-full text-xs font-medium text-violet-300">
+                        {list.category}
+                      </span>
+                    </div>
+
+                    {/* Rank Button */}
+                    <Link to={`/ranking/preset/${list.id}`} className="w-full">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        fullWidth
+                        className="mt-2 gap-1"
+                      >
+                        <Zap className="w-3 h-3" />
+                        Rank This
+                      </Button>
+                    </Link>
                   </div>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
 
-                  {/* Badges and Button */}
-                  <div className="flex items-center justify-between gap-2 mt-auto pt-2">
-                    <span className="inline-block px-2.5 py-1 bg-violet-600/20 border border-violet-500/30 rounded-full text-xs font-medium text-violet-300">
-                      {list.category}
-                    </span>
-                  </div>
-
-                  {/* Rank Button */}
-                  <Link to={`/ranking/preset/${list.id}`} className="w-full">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      fullWidth
-                      className="mt-2 gap-1"
-                    >
-                      <Zap className="w-3 h-3" />
-                      Rank This
-                    </Button>
-                  </Link>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* No Results State */}
-        {filteredLists.length === 0 && (
+        {/* Empty State */}
+        {!loading && filteredLists.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
             <Card padding="lg" className="text-center py-12">
-              <div className="space-y-3">
-                <p className="font-medium text-white/70">No lists in this category</p>
-                <p className="text-sm text-white/50">
-                  Try selecting a different category or check back soon
-                </p>
+              <div className="space-y-4">
+                <div className="w-16 h-16 bg-violet-600/10 border border-violet-500/20 rounded-2xl flex items-center justify-center mx-auto">
+                  <Users className="w-8 h-8 text-white/40" />
+                </div>
+                <div className="space-y-2">
+                  <p className="font-medium text-white/70">
+                    {selectedCategory === 'All'
+                      ? 'No community lists yet'
+                      : `No ${selectedCategory} lists yet`}
+                  </p>
+                  <p className="text-sm text-white/50">
+                    Be the first to create one! Import from Letterboxd or build your own.
+                  </p>
+                </div>
+                <Link to="/create">
+                  <Button variant="primary" size="sm">
+                    Create a List
+                  </Button>
+                </Link>
               </div>
             </Card>
           </motion.div>
         )}
 
-        {/* Coming Soon Footer */}
+        {/* Footer */}
         <motion.div
           className="text-center py-8 border-t border-white/[0.06]"
           initial={{ opacity: 0 }}
@@ -224,7 +248,7 @@ export default function Community() {
           transition={{ duration: 0.4, delay: 0.3 }}
         >
           <p className="text-white/50 text-sm">
-            More lists coming soon as community members submit their own!
+            Lists here are created by the community. Import from Letterboxd or create your own to share!
           </p>
         </motion.div>
       </div>
