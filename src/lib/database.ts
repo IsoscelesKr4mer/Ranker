@@ -236,7 +236,7 @@ function generateShareId(): string {
 }
 
 export async function saveRankingResult(params: {
-  sessionId: string;
+  sessionId?: string;
   listTitle: string;
   results: RankItem[];
   comparisonsMade: number;
@@ -247,12 +247,36 @@ export async function saveRankingResult(params: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
+  // Ensure we have a valid session_id (foreign key to ranking_sessions)
+  let sessionId = params.sessionId;
+  if (!sessionId) {
+    const { data: sessionData, error: sessionError } = await supabase
+      .from('ranking_sessions')
+      .insert({
+        user_id: user.id,
+        list_title: params.listTitle,
+        status: 'completed',
+        comparisons_made: params.comparisonsMade,
+        estimated_total: params.comparisonsMade,
+        sort_state: {},
+        items: params.results,
+        completed_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (sessionError || !sessionData) {
+      return { error: sessionError?.message || 'Failed to create session' };
+    }
+    sessionId = sessionData.id;
+  }
+
   const shareId = params.isPublic ? generateShareId() : null;
 
   const { data, error } = await supabase
     .from('ranking_results')
     .insert({
-      session_id: params.sessionId,
+      session_id: sessionId,
       user_id: user.id,
       list_title: params.listTitle,
       results: params.results,
