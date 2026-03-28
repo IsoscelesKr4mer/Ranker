@@ -5,11 +5,13 @@ import { ArrowLeft, Share2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { getResultById, deleteResult } from '@/lib/database';
+import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
 
 export default function SavedResult() {
   const { resultId } = useParams<{ resultId: string }>();
   const navigate = useNavigate();
+  const { status } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -24,19 +26,40 @@ export default function SavedResult() {
 
   useEffect(() => {
     if (!resultId) return;
-    getResultById(resultId).then((data) => {
-      setResult(data);
-      setLoading(false);
-    });
-  }, [resultId]);
+    // Wait for auth to be ready before fetching
+    if (status === 'loading') return;
+    if (status === 'unauthenticated') {
+      navigate('/auth');
+      return;
+    }
+    getResultById(resultId)
+      .then((data) => {
+        setResult(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to load result:', err);
+        setResult(null);
+        setLoading(false);
+      });
+  }, [resultId, status]);
 
   const handleDelete = async () => {
     if (!resultId) return;
     setDeleting(true);
-    const res = await deleteResult(resultId);
-    if (!res.error) {
-      navigate('/dashboard');
-    } else {
+    try {
+      const res = await deleteResult(resultId);
+      if (!res.error) {
+        navigate('/dashboard');
+      } else {
+        console.error('Delete failed:', res.error);
+        alert('Failed to delete ranking. Please try again.');
+        setDeleting(false);
+        setConfirmDelete(false);
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('Failed to delete ranking. Please try again.');
       setDeleting(false);
       setConfirmDelete(false);
     }

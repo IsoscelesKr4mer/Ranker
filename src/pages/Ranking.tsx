@@ -168,12 +168,18 @@ export default function Ranking() {
           if (searchParams.get('saveList') === 'true') {
             saveList({
               title,
-              category: 'movies',
+              category: 'Movies',
               source: 'letterboxd',
               items: enhanced,
               isPublic: true,
               isCommunity: true,
               coverImageUrl: enhanced[0]?.imageUrl || undefined,
+            }).then(result => {
+              if ('error' in result) {
+                console.error('Failed to save community list:', result.error);
+              } else {
+                console.log('Community list saved:', result.listId);
+              }
             }).catch(err => console.error('Failed to save list:', err));
           }
         } catch (err) {

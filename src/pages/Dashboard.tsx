@@ -310,9 +310,20 @@ export default function Dashboard() {
                   <button
                     onClick={async (e) => {
                       e.preventDefault();
+                      e.stopPropagation();
                       if (confirm('Delete this ranking?')) {
-                        await deleteResult(result.id);
-                        setResults(prev => prev.filter(r => r.id !== result.id));
+                        try {
+                          const res = await deleteResult(result.id);
+                          if (!res.error) {
+                            setResults(prev => prev.filter(r => r.id !== result.id));
+                          } else {
+                            console.error('Delete failed:', res.error);
+                            alert('Failed to delete ranking. Please try again.');
+                          }
+                        } catch (err) {
+                          console.error('Delete error:', err);
+                          alert('Failed to delete ranking. Please try again.');
+                        }
                       }
                     }}
                     className="p-2.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"

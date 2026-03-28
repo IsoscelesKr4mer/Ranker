@@ -360,6 +360,15 @@ export async function deleteResult(resultId: string): Promise<{ error?: string }
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
+  // First delete related ranking_sessions to avoid FK constraint issues
+  // Get the session_id from the result first
+  const { data: resultData } = await supabase
+    .from('ranking_results')
+    .select('session_id')
+    .eq('id', resultId)
+    .eq('user_id', user.id)
+    .single();
+
   const { error } = await supabase
     .from('ranking_results')
     .delete()
@@ -367,6 +376,16 @@ export async function deleteResult(resultId: string): Promise<{ error?: string }
     .eq('user_id', user.id);
 
   if (error) return { error: error.message };
+
+  // Also clean up the associated ranking session
+  if (resultData?.session_id) {
+    await supabase
+      .from('ranking_sessions')
+      .delete()
+      .eq('id', resultData.session_id)
+      .eq('user_id', user.id);
+  }
+
   return {};
 }
 
