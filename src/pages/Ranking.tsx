@@ -5,6 +5,8 @@ import { Button, ProgressBar } from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
 import { useRanking } from '@/hooks/useRanking';
 import { getPresetById } from '@/data/presets';
+import { importLetterboxdList } from '@/lib/letterboxd';
+import { searchMovies, tmdbToRankItem } from '@/lib/tmdb';
 import { saveRankingSession, updateRankingSession, completeRankingSession } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
@@ -79,6 +81,36 @@ export default function Ranking() {
   const [reviewMode, setReviewMode] = useState(true);
   const [reviewItems, setReviewItems] = useState<RankItem[]>([]);
   const [reviewSearch, setReviewSearch] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+
+  // Enhance Letterboxd items with TMDb poster images
+  const enhanceWithTmdb = async (items: RankItem[]): Promise<RankItem[]> => {
+    const enhanced = await Promise.all(
+      items.map(async (item) => {
+        try {
+          const { movies } = await searchMovies(item.title);
+          if (movies.length > 0) {
+            const match = movies[0];
+            const posterUrl = match.poster_path
+              ? `https://image.tmdb.org/t/p/w500${match.poster_path}`
+              : null;
+            return {
+              ...item,
+              imageUrl: posterUrl || item.imageUrl,
+              subtitle: match.release_date ? match.release_date.slice(0, 4) : item.subtitle,
+              metadata: {
+                ...item.metadata,
+                tmdbId: match.id,
+                overview: match.overview,
+              },
+            };
+          }
+        } catch { /* keep original */ }
+        return item;
+      })
+    );
+    return enhanced;
+  };
 
   // Initialize ranking based on route
   useEffect(() => {
@@ -101,8 +133,26 @@ export default function Ranking() {
           return;
         }
       } else if (searchParams.get('url')) {
-        title = 'Importing from Letterboxd...';
         source = 'letterboxd';
+        try {
+          const letterboxdUrl = searchParams.get('url')!;
+          const imported = await importLetterboxdList(letterboxdUrl);
+          if (imported.length === 0) {
+            setImportError('No films found. Make sure the list is public and the URL is correct.');
+            setIsLoading(false);
+            return;
+          }
+          // Try to enhance items with TMDb posters for better image quality
+          const enhanced = await enhanceWithTmdb(imported);
+          items = enhanced;
+          title = 'Letterboxd Import';
+          category = 'movies';
+        } catch (err) {
+          console.error('Letterboxd import failed:', err);
+          setImportError('Failed to import from Letterboxd. Please check the URL and try again.');
+          setIsLoading(false);
+          return;
+        }
       } else if (location.state?.items) {
         items = location.state.items;
         title = location.state.listTitle || 'Custom List';
@@ -254,7 +304,23 @@ export default function Ranking() {
     return prompts[promptIndex % prompts.length];
   }, [rankingState, promptIndex]);
 
-  if (isLoading || (rankingState?.source === 'letterboxd' && !comparison)) {
+  if (importError) {
+    return (
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center px-4">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="mb-4 flex justify-center">
+            <div className="w-10 h-10 rounded-xl bg-red-600/30 flex items-center justify-center text-red-400 text-lg">!</div>
+          </div>
+          <p className="text-white/70 text-base">{importError}</p>
+          <Button variant="secondary" onClick={() => navigate('/browse')}>
+            Back to Browse
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center px-4">
         <div className="text-center">
@@ -262,7 +328,7 @@ export default function Ranking() {
             <div className="w-10 h-10 rounded-xl bg-violet-600/30 animate-pulse" />
           </div>
           <p className="text-white/55 text-base">
-            {rankingState?.source === 'letterboxd'
+            {searchParams.get('url')
               ? 'Importing your Letterboxd list...'
               : 'Loading your ranking...'}
           </p>
