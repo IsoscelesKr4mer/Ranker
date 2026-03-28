@@ -11,6 +11,8 @@ const Ranking = lazy(() => import('@/pages/Ranking'));
 const Results = lazy(() => import('@/pages/Results'));
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Community = lazy(() => import('@/pages/Community'));
+const SharedResult = lazy(() => import('@/pages/SharedResult'));
+const SavedResult = lazy(() => import('@/pages/SavedResult'));
 
 // Minimal loading screen that matches our dark theme
 function PageLoader() {
@@ -44,6 +46,8 @@ function AppRoutes() {
         <Route path="/results" element={<Results />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/community" element={<Community />} />
+        <Route path="/results/:resultId" element={<SavedResult />} />
+        <Route path="/shared/:shareId" element={<SharedResult />} />
       </Routes>
     </Suspense>
   );

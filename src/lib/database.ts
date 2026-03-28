@@ -322,6 +322,54 @@ export async function getUserResults(): Promise<{
   }));
 }
 
+export async function getResultById(resultId: string): Promise<{
+  id: string;
+  listTitle: string;
+  results: RankItem[];
+  comparisonsMade: number;
+  shareId?: string;
+  createdAt: string;
+} | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('ranking_results')
+    .select('*')
+    .eq('id', resultId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    listTitle: data.list_title,
+    results: data.results as RankItem[],
+    comparisonsMade: data.comparisons_made,
+    shareId: data.share_id || undefined,
+    createdAt: data.created_at,
+  };
+}
+
+export async function deleteResult(resultId: string): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { error } = await supabase
+    .from('ranking_results')
+    .delete()
+    .eq('id', resultId)
+    .eq('user_id', user.id);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function getSharedResult(shareId: string): Promise<{
   listTitle: string;
   results: RankItem[];

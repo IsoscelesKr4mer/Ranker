@@ -25,6 +25,7 @@ export default function Results() {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedResultId, setSavedResultId] = useState<string | null>(null);
 
   // Try location state first, then fall back to sessionStorage (for post-auth redirects)
   const locationState = location.state as ResultsState | null;
@@ -83,7 +84,7 @@ export default function Results() {
     navigate('/auth');
   };
 
-  const handleShareResults = async () => {
+  const handleSaveAndShare = async () => {
     if (!user) {
       saveAndRedirectToAuth();
       return;
@@ -93,25 +94,35 @@ export default function Results() {
       setSaveState('saving');
       setSaveError(null);
 
-      const response = await saveRankingResult({
-        sessionId: state?.sessionId,
-        listTitle,
-        results: result,
-        comparisonsMade: comparisons,
-        isPublic: true,
-      });
+      // Only save once — reuse if already saved
+      if (!savedResultId) {
+        const response = await saveRankingResult({
+          sessionId: state?.sessionId,
+          listTitle,
+          results: result,
+          comparisonsMade: comparisons,
+          isPublic: true,
+        });
 
-      if ('error' in response) {
-        setSaveState('error');
-        setSaveError(response.error);
-        setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
-        return;
-      }
+        if ('error' in response) {
+          setSaveState('error');
+          setSaveError(response.error);
+          setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
+          return;
+        }
 
-      if (response.shareId) {
-        const link = `${window.location.origin}/shared/${response.shareId}`;
-        setShareLink(link);
-        await navigator.clipboard.writeText(link);
+        setSavedResultId(response.resultId);
+
+        if (response.shareId) {
+          const link = `${window.location.origin}/shared/${response.shareId}`;
+          setShareLink(link);
+          await navigator.clipboard.writeText(link);
+          setCopyFeedback(true);
+          setTimeout(() => setCopyFeedback(false), 2000);
+        }
+      } else if (shareLink) {
+        // Already saved and shared — just copy the link again
+        await navigator.clipboard.writeText(shareLink);
         setCopyFeedback(true);
         setTimeout(() => setCopyFeedback(false), 2000);
       }
@@ -129,6 +140,13 @@ export default function Results() {
   const handleSaveToProfile = async () => {
     if (!user) {
       saveAndRedirectToAuth();
+      return;
+    }
+
+    // Already saved — don't create a duplicate
+    if (savedResultId) {
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2000);
       return;
     }
 
@@ -151,6 +169,7 @@ export default function Results() {
         return;
       }
 
+      setSavedResultId(response.resultId);
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 2000);
     } catch (err) {
@@ -431,7 +450,7 @@ export default function Results() {
           transition={{ duration: 0.4, delay: 0.5 }}
         >
           <Button
-            onClick={handleShareResults}
+            onClick={handleSaveAndShare}
             variant={copyFeedback || saveState === 'saved' ? 'secondary' : 'primary'}
             size="lg"
             fullWidth

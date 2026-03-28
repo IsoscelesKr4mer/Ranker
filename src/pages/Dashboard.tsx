@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +10,7 @@ import {
   getUserLists,
   getUserResults,
   getInProgressSessions,
+  deleteResult,
 } from '@/lib/database';
 import type { RankList, RankingSession } from '@/types';
 
@@ -294,17 +295,32 @@ export default function Dashboard() {
           {!loading && results.length > 0 ? (
             <div className="space-y-3">
               {results.map((result) => (
-                <Link key={result.id} to={`/results/${result.id}`}>
-                  <Card padding="lg" hover className="space-y-3 flex items-center justify-between">
-                    <div className="space-y-1 flex-1">
-                      <h3 className="font-semibold text-white">{result.listTitle}</h3>
-                      <p className="text-xs text-white/50">
-                        {result.results.length} items • {result.comparisonsMade} comparisons • {new Date(result.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-violet-400 text-sm font-medium">View →</div>
-                  </Card>
-                </Link>
+                <div key={result.id} className="flex items-center gap-2">
+                  <Link to={`/results/${result.id}`} className="flex-1">
+                    <Card padding="lg" hover className="flex items-center justify-between">
+                      <div className="space-y-1 flex-1">
+                        <h3 className="font-semibold text-white">{result.listTitle}</h3>
+                        <p className="text-xs text-white/50">
+                          {result.results.length} items • {result.comparisonsMade} comparisons • {new Date(result.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-violet-400 text-sm font-medium">View →</div>
+                    </Card>
+                  </Link>
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      if (confirm('Delete this ranking?')) {
+                        await deleteResult(result.id);
+                        setResults(prev => prev.filter(r => r.id !== result.id));
+                      }
+                    }}
+                    className="p-2.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                    title="Delete ranking"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
