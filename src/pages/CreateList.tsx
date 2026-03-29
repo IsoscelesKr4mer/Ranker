@@ -5,7 +5,7 @@ import { Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen, AlertCircle
 import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
-import { searchGames, igdbToRankItem, lookupGame, getCharactersByGame, igdbCharacterToRankItem, type IGDBGame } from '@/lib/igdb';
+import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
 import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
 import { saveList } from '@/lib/database';
@@ -32,11 +32,6 @@ export default function CreateList() {
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Custom');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
-  const [gameSearchType, setGameSearchType] = useState<'games' | 'characters'>('games');
-  const [characterGameQuery, setCharacterGameQuery] = useState('');
-  const [characterGameResults, setCharacterGameResults] = useState<IGDBGame[]>([]);
-  const [selectedGame, setSelectedGame] = useState<IGDBGame | null>(null);
-  const [loadingCharacters, setLoadingCharacters] = useState(false);
   const [isCommunity, setIsCommunity] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -157,12 +152,6 @@ export default function CreateList() {
 
   // Search with debounce
   useEffect(() => {
-    // Skip normal search if in character mode (handled separately)
-    if (selectedCategory === 'Games' && gameSearchType === 'characters') {
-      setSearchResults([]);
-      return;
-    }
-
     if (!searchQuery.trim()) {
       setSearchResults([]);
       return;
@@ -203,51 +192,7 @@ export default function CreateList() {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchQuery, selectedCategory, musicSearchType, gameSearchType]);
-
-  // Character game lookup with debounce
-  const charGameTimeoutRef = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (selectedCategory !== 'Games' || gameSearchType !== 'characters') return;
-    if (!characterGameQuery.trim()) {
-      setCharacterGameResults([]);
-      return;
-    }
-
-    if (charGameTimeoutRef.current) clearTimeout(charGameTimeoutRef.current);
-
-    charGameTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const { games } = await lookupGame(characterGameQuery);
-        setCharacterGameResults(games || []);
-      } catch { setCharacterGameResults([]); }
-      finally { setIsSearching(false); }
-    }, 300);
-
-    return () => { if (charGameTimeoutRef.current) clearTimeout(charGameTimeoutRef.current); };
-  }, [characterGameQuery, selectedCategory, gameSearchType]);
-
-  // Load characters when a game is selected
-  const handleSelectGameForCharacters = useCallback(async (game: IGDBGame) => {
-    setSelectedGame(game);
-    setLoadingCharacters(true);
-    setCharacterGameResults([]);
-    setCharacterGameQuery('');
-    try {
-      const { characters } = await getCharactersByGame(game.id);
-      if (characters.length > 0) {
-        const charItems = characters
-          .filter(c => c.name)
-          .map(c => igdbCharacterToRankItem(c));
-        setItems(prev => [...prev, ...charItems]);
-      }
-    } catch (err) {
-      console.error('Failed to load characters:', err);
-    } finally {
-      setLoadingCharacters(false);
-    }
-  }, []);
+  }, [searchQuery, selectedCategory, musicSearchType]);
 
   const handleAddSearchResult = useCallback((result: any) => {
     let rankItem;
@@ -582,9 +527,7 @@ export default function CreateList() {
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-white/60">
-                    {selectedCategory === 'Games' && gameSearchType === 'characters'
-                      ? 'Load Characters from a Game'
-                      : `Search ${selectedCategory === 'Movies' ? 'Movies' : selectedCategory === 'TV' ? 'TV Shows' : selectedCategory === 'Games' ? 'Games' : musicSearchType === 'album' ? 'Albums' : musicSearchType === 'artist' ? 'Artists' : 'Songs'}`}
+                    {`Search ${selectedCategory === 'Movies' ? 'Movies' : selectedCategory === 'TV' ? 'TV Shows' : selectedCategory === 'Games' ? 'Games' : musicSearchType === 'album' ? 'Albums' : musicSearchType === 'artist' ? 'Artists' : 'Songs'}`}
                   </label>
 
                   {/* Music sub-type picker */}
@@ -606,119 +549,6 @@ export default function CreateList() {
                     </div>
                   )}
 
-                  {/* Games sub-type picker */}
-                  {selectedCategory === 'Games' && (
-                    <div className="flex gap-1.5">
-                      {([['games', 'Games'], ['characters', 'Characters']] as const).map(([type, label]) => (
-                        <button
-                          key={type}
-                          onClick={() => { setGameSearchType(type); setSearchQuery(''); setSearchResults([]); setSelectedGame(null); setCharacterGameQuery(''); setCharacterGameResults([]); }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                            gameSearchType === type
-                              ? 'bg-violet-600 text-white'
-                              : 'bg-white/[0.05] text-white/50 hover:text-white/70 hover:bg-white/[0.08]'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Character mode: game search → select game → auto-load characters */}
-                  {selectedCategory === 'Games' && gameSearchType === 'characters' ? (
-                    <div className="space-y-3">
-                      {!selectedGame ? (
-                        <>
-                          <div className="relative">
-                            <Search className="absolute left-4 top-3.5 w-4 h-4 text-white/25 pointer-events-none" />
-                            <Input
-                              type="text"
-                              placeholder="Search for a game to load its characters..."
-                              value={characterGameQuery}
-                              onChange={e => setCharacterGameQuery(e.target.value)}
-                              className="pl-12"
-                            />
-                          </div>
-                          <AnimatePresence>
-                            {(isSearching || characterGameResults.length > 0) && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                className="space-y-1.5 max-h-60 overflow-y-auto"
-                              >
-                                {isSearching ? (
-                                  <div className="py-6 text-center">
-                                    <div className="inline-flex items-center gap-2 text-white/50">
-                                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                      </svg>
-                                      <span className="text-sm">Searching games...</span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  characterGameResults.map(game => (
-                                    <motion.button
-                                      key={game.id}
-                                      onClick={() => handleSelectGameForCharacters(game)}
-                                      className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.07] hover:border-white/[0.12] transition-all text-left"
-                                      whileHover={{ scale: 1.01 }}
-                                      whileTap={{ scale: 0.99 }}
-                                    >
-                                      {game.cover ? (
-                                        <img src={game.cover} alt={game.name} className="w-10 h-14 rounded object-cover flex-shrink-0" />
-                                      ) : (
-                                        <div className="w-10 h-14 rounded bg-violet-600/15 flex items-center justify-center flex-shrink-0">
-                                          <Gamepad2 className="w-4 h-4 text-white/30" />
-                                        </div>
-                                      )}
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium text-white/90 truncate">{game.name}</p>
-                                        {game.releaseDate && <p className="text-xs text-white/40">{game.releaseDate}</p>}
-                                      </div>
-                                      <span className="text-xs text-violet-400 font-medium flex-shrink-0">Load Characters →</span>
-                                    </motion.button>
-                                  ))
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3 p-3 bg-violet-600/10 border border-violet-500/25 rounded-lg">
-                            {selectedGame.cover && (
-                              <img src={selectedGame.cover} alt={selectedGame.name} className="w-8 h-11 rounded object-cover flex-shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-violet-300 truncate">{selectedGame.name}</p>
-                              <p className="text-xs text-white/40">{loadingCharacters ? 'Loading characters...' : 'Characters loaded'}</p>
-                            </div>
-                            <button
-                              onClick={() => { setSelectedGame(null); setCharacterGameQuery(''); }}
-                              className="text-white/40 hover:text-white/70 transition-colors flex-shrink-0"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                          {loadingCharacters && (
-                            <div className="py-6 text-center">
-                              <div className="inline-flex items-center gap-2 text-white/50">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                                <span className="text-sm">Loading characters from IGDB...</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                  <>
                   <div className="relative">
                     <Search className="absolute left-4 top-3.5 w-4 h-4 text-white/25 pointer-events-none" />
                     <Input
@@ -798,8 +628,6 @@ export default function CreateList() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  </>
-                  )}
                 </div>
               </Card>
             )}
