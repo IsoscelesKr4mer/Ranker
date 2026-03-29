@@ -197,7 +197,16 @@ export default function CreateList() {
   }, [searchQuery, selectedCategory, musicSearchType]);
 
   const handleAddSearchResult = useCallback((result: any) => {
-    if (addedSearchIds.has(result.id)) return;
+    if (addedSearchIds.has(result.id)) {
+      // Tap again on a checkmarked result to remove it from the list
+      setItems(prev => prev.filter(item => item.metadata?.searchResultId !== result.id));
+      setAddedSearchIds(prev => {
+        const next = new Set(prev);
+        next.delete(result.id);
+        return next;
+      });
+      return;
+    }
     let rankItem;
     if (selectedCategory === 'Games') {
       rankItem = igdbToRankItem(result);
@@ -208,7 +217,8 @@ export default function CreateList() {
     } else {
       rankItem = tmdbToRankItem(result);
     }
-    setItems(prev => [...prev, rankItem]);
+    const rankItemWithMeta = { ...rankItem, metadata: { ...(rankItem.metadata || {}), searchResultId: result.id } };
+    setItems(prev => [...prev, rankItemWithMeta]);
     setAddedSearchIds(prev => new Set([...prev, result.id]));
   }, [selectedCategory, addedSearchIds]);
 
@@ -262,7 +272,18 @@ export default function CreateList() {
   }, [libraryImages, items]);
 
   const handleRemoveItem = useCallback((id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+    setItems(prev => {
+      const itemToRemove = prev.find(item => item.id === id);
+      if (itemToRemove?.metadata?.searchResultId !== undefined) {
+        const searchId = itemToRemove.metadata.searchResultId as string | number;
+        setAddedSearchIds(prevIds => {
+          const next = new Set(prevIds);
+          next.delete(searchId);
+          return next;
+        });
+      }
+      return prev.filter(item => item.id !== id);
+    });
   }, []);
 
   // CSV upload state
@@ -849,7 +870,7 @@ export default function CreateList() {
 
           {/* Right Column: Items List */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 space-y-4">
+            <div className="sticky top-24 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-white">Items Added</h3>
@@ -862,13 +883,12 @@ export default function CreateList() {
                 </div>
 
                 {/* Items Scroll */}
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-[40vh] overflow-y-auto">
                   <AnimatePresence mode="popLayout">
                     {items.length > 0 ? (
                       items.map((item) => (
                         <motion.div
                           key={item.id}
-                          layout
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -20 }}
