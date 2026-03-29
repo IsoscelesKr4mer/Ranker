@@ -426,7 +426,7 @@ export default function CreateList() {
                   </div>
                   <button
                     onClick={() => handleRemoveItem(item.id)}
-                    className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity p-0.5"
+                    className="flex-shrink-0 opacity-40 hover:opacity-100 transition-opacity p-0.5"
                   >
                     <X className="w-3.5 h-3.5 text-red-400" />
                   </button>
