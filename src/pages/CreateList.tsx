@@ -138,6 +138,7 @@ export default function CreateList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [addedSearchIds, setAddedSearchIds] = useState<Set<string | number>>(new Set());
   const searchTimeoutRef = useRef<number | undefined>(undefined);
 
   // Manual item add state
@@ -154,6 +155,7 @@ export default function CreateList() {
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
+      setAddedSearchIds(new Set());
       return;
     }
 
@@ -195,6 +197,7 @@ export default function CreateList() {
   }, [searchQuery, selectedCategory, musicSearchType]);
 
   const handleAddSearchResult = useCallback((result: any) => {
+    if (addedSearchIds.has(result.id)) return;
     let rankItem;
     if (selectedCategory === 'Games') {
       rankItem = igdbToRankItem(result);
@@ -206,9 +209,8 @@ export default function CreateList() {
       rankItem = tmdbToRankItem(result);
     }
     setItems(prev => [...prev, rankItem]);
-    setSearchQuery('');
-    setSearchResults([]);
-  }, [selectedCategory]);
+    setAddedSearchIds(prev => new Set([...prev, result.id]));
+  }, [selectedCategory, addedSearchIds]);
 
   const handleAddManualItem = useCallback(() => {
     if (!manualItemTitle.trim()) return;
@@ -592,11 +594,13 @@ export default function CreateList() {
                             const imageUrl = isMusic ? result.imageUrl
                               : isGame ? result.cover
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
+                            const isAdded = addedSearchIds.has(result.id);
                             return (
                               <div key={result.id} className="relative w-full" style={{ paddingBottom: isMusic ? '100%' : '150%' }}>
                                 <motion.button
                                   onClick={() => handleAddSearchResult(result)}
-                                  className="group absolute inset-0 rounded-lg overflow-hidden"
+                                  disabled={isAdded}
+                                  className={`group absolute inset-0 rounded-lg overflow-hidden ${isAdded ? 'cursor-default' : ''}`}
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}
                                 >
@@ -611,9 +615,19 @@ export default function CreateList() {
                                       {isMusic ? <Music className="w-5 h-5 text-white/30" /> : isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
                                     </div>
                                   )}
-                                  <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Plus className="w-6 h-6 text-white" />
-                                  </div>
+                                  {isAdded ? (
+                                    <div className="absolute inset-0 bg-emerald-500/40 flex items-center justify-center">
+                                      <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Plus className="w-6 h-6 text-white" />
+                                    </div>
+                                  )}
                                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                                     <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
                                     {displayYear && (
@@ -890,7 +904,7 @@ export default function CreateList() {
                             </div>
                             <motion.button
                               onClick={() => handleRemoveItem(item.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              className="flex-shrink-0 opacity-40 hover:opacity-100 transition-opacity"
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                             >
