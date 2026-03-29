@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen, AlertCircle, Image as ImageIcon, Upload } from 'lucide-react';
+import { Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen, AlertCircle, Image as ImageIcon, Upload, Import } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
+import { isValidLetterboxdUrl } from '@/lib/letterboxd';
 import { saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import { ImageLibrary } from '@/components/ImageLibrary';
@@ -34,6 +35,10 @@ export default function CreateList() {
   const [tagsInput, setTagsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Letterboxd import state
+  const [letterboxdUrl, setLetterboxdUrl] = useState('');
+  const [letterboxdValidation, setLetterboxdValidation] = useState<'idle' | 'valid' | 'invalid'>('idle');
 
   // TMDb search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -575,6 +580,95 @@ export default function CreateList() {
                   </motion.p>
                 )}
               </AnimatePresence>
+            </Card>
+
+            {/* Letterboxd Import */}
+            <Card padding="lg" className="space-y-4">
+              <label className="block text-sm font-medium text-white/60">Import from Letterboxd</label>
+              <p className="text-xs text-white/40 -mt-2">
+                Paste a public Letterboxd list, watchlist, or film collection URL
+              </p>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="https://letterboxd.com/username/list/list-name/"
+                    value={letterboxdUrl}
+                    onChange={e => { setLetterboxdUrl(e.target.value); setLetterboxdValidation('idle'); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (isValidLetterboxdUrl(letterboxdUrl)) {
+                          setLetterboxdValidation('valid');
+                        } else {
+                          setLetterboxdValidation('invalid');
+                        }
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={() => {
+                      if (isValidLetterboxdUrl(letterboxdUrl)) {
+                        setLetterboxdValidation('valid');
+                      } else {
+                        setLetterboxdValidation('invalid');
+                      }
+                    }}
+                    variant="secondary"
+                    disabled={!letterboxdUrl.trim()}
+                  >
+                    Validate
+                  </Button>
+                </div>
+
+                <AnimatePresence>
+                  {letterboxdValidation === 'valid' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="space-y-2"
+                    >
+                      <div className="p-3 bg-green-500/10 border border-green-500/25 rounded-xl text-green-300 text-sm flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
+                        Valid Letterboxd URL!
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const params = new URLSearchParams({ url: letterboxdUrl });
+                          if (isCommunity) {
+                            params.set('saveList', 'true');
+                            if (listTitle.trim()) params.set('listTitle', listTitle.trim());
+                          }
+                          navigate(`/ranking/letterboxd?${params.toString()}`);
+                        }}
+                        variant="primary"
+                        fullWidth
+                      >
+                        <Import className="w-4 h-4" />
+                        Import & Start Ranking
+                      </Button>
+                    </motion.div>
+                  )}
+                  {letterboxdValidation === 'invalid' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="p-3 bg-red-500/10 border border-red-500/25 rounded-xl text-red-300 text-sm flex items-center gap-2"
+                    >
+                      <span className="w-1.5 h-1.5 bg-red-400 rounded-full flex-shrink-0" />
+                      Invalid URL. Please enter a valid Letterboxd link.
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className="space-y-1 text-xs text-white/28 font-mono pt-2 border-t border-white/[0.07]">
+                <p className="text-white/38 font-sans font-semibold mb-1.5">Example URLs:</p>
+                <p>letterboxd.com/username/list/list-name/</p>
+                <p>letterboxd.com/username/watchlist/</p>
+                <p>letterboxd.com/username/films/</p>
+              </div>
             </Card>
 
             {/* Image Library */}
