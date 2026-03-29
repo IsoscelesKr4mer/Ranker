@@ -590,8 +590,8 @@ export default function CreateList() {
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
-                        className="grid grid-cols-3 sm:grid-cols-4 gap-2.5"
                       >
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                         {isSearching ? (
                           <div className="col-span-full py-8 text-center">
                             <div className="inline-flex items-center gap-2 text-white/50">
@@ -617,7 +617,8 @@ export default function CreateList() {
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             const isAdded = addedSearchIds.has(result.id);
                             return (
-                              <div key={result.id} className={`relative min-w-0 rounded-lg overflow-hidden ${isMusic ? 'aspect-square' : 'aspect-[2/3]'}`}>
+                              <div key={result.id} className="min-w-0">
+                                <div className={`relative w-full overflow-hidden rounded-lg ${isMusic ? 'aspect-square' : 'aspect-[2/3]'}`}>
                                 <button
                                   onClick={() => handleAddSearchResult(result)}
                                   className="group absolute inset-0"
@@ -661,10 +662,12 @@ export default function CreateList() {
                                     </div>
                                   </motion.div>
                                 </button>
+                                </div>
                               </div>
                             );
                           })
                         )}
+                      </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
