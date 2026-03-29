@@ -86,6 +86,29 @@ export async function getCommunityLists(): Promise<RankList[]> {
   return data.map(dbListToRankList);
 }
 
+export async function deleteList(listId: string): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  // Delete list items first (child rows)
+  await supabase
+    .from('list_items')
+    .delete()
+    .eq('list_id', listId);
+
+  // Delete the list itself
+  const { error } = await supabase
+    .from('lists')
+    .delete()
+    .eq('id', listId)
+    .eq('creator_id', user.id);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function getListById(listId: string): Promise<RankList | null> {
   if (!isSupabaseConfigured()) return null;
 

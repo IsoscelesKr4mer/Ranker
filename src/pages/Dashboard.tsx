@@ -11,6 +11,7 @@ import {
   getUserResults,
   getInProgressSessions,
   deleteResult,
+  deleteList,
 } from '@/lib/database';
 import type { RankList, RankingSession } from '@/types';
 
@@ -369,18 +370,45 @@ export default function Dashboard() {
           </div>
 
           {!loading && lists.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-3">
               {lists.map((list) => (
-                <Link key={list.id} to={`/rank/${list.id}`}>
-                  <Card padding="lg" hover className="space-y-3 h-full flex flex-col">
-                    <div className="space-y-2 flex-1">
-                      <h3 className="font-semibold text-white line-clamp-2">{list.title}</h3>
-                      <p className="text-xs text-white/50">{list.category}</p>
-                      <p className="text-xs text-white/60">{list.itemCount} items</p>
-                    </div>
-                    <div className="text-violet-400 text-sm font-medium">Rank →</div>
-                  </Card>
-                </Link>
+                <div key={list.id} className="flex items-center gap-2">
+                  <Link to={`/ranking/preset/${list.id}`} className="flex-1">
+                    <Card padding="lg" hover className="flex items-center justify-between">
+                      <div className="space-y-1 flex-1">
+                        <h3 className="font-semibold text-white">{list.title}</h3>
+                        <p className="text-xs text-white/50">
+                          {list.category} • {list.itemCount} items • {new Date(list.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-violet-400 text-sm font-medium">Rank →</div>
+                    </Card>
+                  </Link>
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (confirm('Delete this list?')) {
+                        try {
+                          const res = await deleteList(list.id);
+                          if (!res.error) {
+                            setLists(prev => prev.filter(l => l.id !== list.id));
+                          } else {
+                            console.error('Delete failed:', res.error);
+                            alert('Failed to delete list. Please try again.');
+                          }
+                        } catch (err) {
+                          console.error('Delete error:', err);
+                          alert('Failed to delete list. Please try again.');
+                        }
+                      }
+                    }}
+                    className="p-2.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                    title="Delete list"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
