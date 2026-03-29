@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button, Card } from '@/components/ui';
 import { PRESET_LISTS } from '@/data/presets';
-import { List, GitCompareArrows, Trophy, ExternalLink } from 'lucide-react';
+import { List, GitCompareArrows, Trophy, ExternalLink, FlaskConical } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 
 export default function Landing() {
@@ -125,6 +125,43 @@ export default function Landing() {
               )}
             </motion.div>
           </motion.div>
+        </motion.div>
+      </section>
+
+      {/* ── Merge Sort Blurb ──────────────────────────────────────── */}
+      <section className="max-w-3xl mx-auto px-8 sm:px-12 py-10 sm:py-14">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.6 }}
+          className="relative rounded-2xl border border-violet-500/20 bg-violet-600/[0.07] px-8 py-8 sm:px-12 sm:py-10 text-center overflow-hidden"
+        >
+          {/* Subtle glow */}
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-600/10 via-transparent to-purple-600/5 pointer-events-none" />
+
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 bg-violet-500/15 border border-violet-500/25 rounded-full px-4 py-1.5 mb-5">
+              <FlaskConical className="w-3.5 h-3.5 text-violet-400" />
+              <span className="text-[11px] font-bold text-violet-400 tracking-widest uppercase">The Science</span>
+            </div>
+
+            <h2
+              className="text-2xl sm:text-3xl font-bold text-white mb-4 tracking-tight"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
+              Ranking 100 things shouldn't feel like 100 decisions.
+            </h2>
+
+            <p className="text-base text-white/60 max-w-xl mx-auto leading-relaxed">
+              We use <span className="text-violet-300 font-semibold">merge sort</span> — the same divide-and-conquer
+              algorithm that powers everything from search engines to genome sequencing. Instead of asking you to compare
+              every item against every other (that's 4,950 matchups for a list of 100), merge sort splits your list into
+              tiny pairs, sorts those, then merges them back up into a perfect ranking. You only ever answer one simple
+              question: <em className="text-white/80">which of these two do you prefer?</em> The math handles the rest,
+              giving you a definitive, scientifically-ordered list in a fraction of the choices.
+            </p>
+          </div>
         </motion.div>
       </section>
 
