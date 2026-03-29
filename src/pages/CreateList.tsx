@@ -7,7 +7,7 @@ import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
-import { isValidLetterboxdUrl } from '@/lib/letterboxd';
+import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
 import { saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import { ImageLibrary } from '@/components/ImageLibrary';
@@ -39,6 +39,51 @@ export default function CreateList() {
   // Letterboxd import state
   const [letterboxdUrl, setLetterboxdUrl] = useState('');
   const [letterboxdValidation, setLetterboxdValidation] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [letterboxdImporting, setLetterboxdImporting] = useState(false);
+  const [letterboxdError, setLetterboxdError] = useState<string | null>(null);
+  const [letterboxdSuccess, setLetterboxdSuccess] = useState<number | null>(null);
+
+  const handleLetterboxdImport = useCallback(async () => {
+    if (!isValidLetterboxdUrl(letterboxdUrl)) return;
+    setLetterboxdImporting(true);
+    setLetterboxdError(null);
+    setLetterboxdSuccess(null);
+    try {
+      const imported = await importLetterboxdList(letterboxdUrl);
+      if (imported.length === 0) {
+        setLetterboxdError('No films found. Make sure the list is public and the URL is correct.');
+        setLetterboxdImporting(false);
+        return;
+      }
+      // Enhance with TMDb posters
+      const enhanced = await Promise.all(
+        imported.map(async (item) => {
+          try {
+            const { movies } = await searchMovies(item.title);
+            if (movies.length > 0 && movies[0].poster_path) {
+              return {
+                ...item,
+                imageUrl: `https://image.tmdb.org/t/p/w500${movies[0].poster_path}`,
+                subtitle: movies[0].release_date?.slice(0, 4) || item.subtitle,
+              };
+            }
+          } catch { /* keep original */ }
+          return item;
+        })
+      );
+      setItems(prev => [...prev, ...enhanced]);
+      setSelectedCategory('movies');
+      setLetterboxdSuccess(enhanced.length);
+      setLetterboxdUrl('');
+      setLetterboxdValidation('idle');
+      setTimeout(() => setLetterboxdSuccess(null), 5000);
+    } catch (err) {
+      console.error('Letterboxd import failed:', err);
+      setLetterboxdError('Failed to import from Letterboxd. Please check the URL and try again.');
+    } finally {
+      setLetterboxdImporting(false);
+    }
+  }, [letterboxdUrl]);
 
   // TMDb search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -334,8 +379,46 @@ export default function CreateList() {
     }
   };
 
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const handleSaveListOnly = async () => {
+    if (!listTitle.trim() || items.length === 0) return;
+    if (!user) {
+      setSaveError('Sign in to save your list.');
+      return;
+    }
+
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      const result = await saveList({
+        title: listTitle,
+        category: selectedCategory,
+        source: 'web',
+        items,
+        isCommunity,
+        isPublic: true,
+        tags,
+      });
+
+      if ('error' in result) {
+        setSaveError(result.error);
+      } else {
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 4000);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save list';
+      setSaveError(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const isSearchableCategory = selectedCategory === 'movies' || selectedCategory === 'tv' || selectedCategory === 'games' || selectedCategory === 'music';
   const canStartRanking = items.length >= 3 && listTitle.trim();
+  const canSave = items.length > 0 && listTitle.trim() && user;
 
   return (
     <PageLayout maxWidth="lg">
@@ -586,7 +669,7 @@ export default function CreateList() {
             <Card padding="lg" className="space-y-4">
               <label className="block text-sm font-medium text-white/60">Import from Letterboxd</label>
               <p className="text-xs text-white/40 -mt-2">
-                Paste a public Letterboxd list, watchlist, or film collection URL
+                Paste a public Letterboxd list, watchlist, or film collection URL to add films to your list
               </p>
               <div className="space-y-2">
                 <div className="flex gap-2">
@@ -594,62 +677,48 @@ export default function CreateList() {
                     type="url"
                     placeholder="https://letterboxd.com/username/list/list-name/"
                     value={letterboxdUrl}
-                    onChange={e => { setLetterboxdUrl(e.target.value); setLetterboxdValidation('idle'); }}
+                    onChange={e => { setLetterboxdUrl(e.target.value); setLetterboxdValidation('idle'); setLetterboxdError(null); }}
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
                         if (isValidLetterboxdUrl(letterboxdUrl)) {
-                          setLetterboxdValidation('valid');
+                          handleLetterboxdImport();
                         } else {
                           setLetterboxdValidation('invalid');
                         }
                       }
                     }}
+                    disabled={letterboxdImporting}
                     className="flex-1"
                   />
                   <Button
                     onClick={() => {
                       if (isValidLetterboxdUrl(letterboxdUrl)) {
-                        setLetterboxdValidation('valid');
+                        handleLetterboxdImport();
                       } else {
                         setLetterboxdValidation('invalid');
                       }
                     }}
-                    variant="secondary"
-                    disabled={!letterboxdUrl.trim()}
+                    variant="primary"
+                    disabled={!letterboxdUrl.trim() || letterboxdImporting}
                   >
-                    Validate
+                    {letterboxdImporting ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Import className="w-4 h-4" />
+                        Import
+                      </>
+                    )}
                   </Button>
                 </div>
 
                 <AnimatePresence>
-                  {letterboxdValidation === 'valid' && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      className="space-y-2"
-                    >
-                      <div className="p-3 bg-green-500/10 border border-green-500/25 rounded-xl text-green-300 text-sm flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0" />
-                        Valid Letterboxd URL!
-                      </div>
-                      <Button
-                        onClick={() => {
-                          const params = new URLSearchParams({ url: letterboxdUrl });
-                          if (isCommunity) {
-                            params.set('saveList', 'true');
-                            if (listTitle.trim()) params.set('listTitle', listTitle.trim());
-                          }
-                          navigate(`/ranking/letterboxd?${params.toString()}`);
-                        }}
-                        variant="primary"
-                        fullWidth
-                      >
-                        <Import className="w-4 h-4" />
-                        Import & Start Ranking
-                      </Button>
-                    </motion.div>
-                  )}
                   {letterboxdValidation === 'invalid' && (
                     <motion.div
                       initial={{ opacity: 0, y: -6 }}
@@ -660,6 +729,27 @@ export default function CreateList() {
                       <span className="w-1.5 h-1.5 bg-red-400 rounded-full flex-shrink-0" />
                       Invalid URL. Please enter a valid Letterboxd link.
                     </motion.div>
+                  )}
+                  {letterboxdError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="flex items-center gap-2 text-sm text-red-400"
+                    >
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      {letterboxdError}
+                    </motion.div>
+                  )}
+                  {letterboxdSuccess !== null && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="text-sm text-emerald-400"
+                    >
+                      Imported {letterboxdSuccess} {letterboxdSuccess === 1 ? 'film' : 'films'} from Letterboxd
+                    </motion.p>
                   )}
                 </AnimatePresence>
               </div>
@@ -826,6 +916,20 @@ export default function CreateList() {
                 </Card>
               )}
 
+              {/* Success Message */}
+              <AnimatePresence>
+                {savedSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex items-start gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg"
+                  >
+                    <p className="text-sm text-emerald-300">List saved{isCommunity ? ' to community' : ''}! You can find it on your dashboard.</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Error Message */}
               {saveError && (
                 <motion.div
@@ -838,35 +942,52 @@ export default function CreateList() {
                 </motion.div>
               )}
 
-              {/* Start Ranking Button */}
-              <motion.div
-                animate={{
-                  scale: canStartRanking ? 1 : 0.95,
-                  opacity: canStartRanking ? 1 : 0.6,
-                }}
-              >
-                <Button
-                  onClick={handleStartRanking}
-                  variant={canStartRanking ? 'primary' : 'secondary'}
-                  fullWidth
-                  size="lg"
-                  disabled={!canStartRanking || isSaving}
-                  className="w-full"
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                {/* Start Ranking Button */}
+                <motion.div
+                  animate={{
+                    scale: canStartRanking ? 1 : 0.95,
+                    opacity: canStartRanking ? 1 : 0.6,
+                  }}
                 >
-                  <span>{isSaving ? 'Saving...' : 'Start Ranking'}</span>
-                  {items.length > 0 && !isSaving && (
-                    <span className="text-sm font-normal opacity-80">({items.length})</span>
-                  )}
-                </Button>
-              </motion.div>
+                  <Button
+                    onClick={handleStartRanking}
+                    variant={canStartRanking ? 'primary' : 'secondary'}
+                    fullWidth
+                    size="lg"
+                    disabled={!canStartRanking || isSaving}
+                    className="w-full"
+                  >
+                    <span>{isSaving ? 'Saving...' : 'Save & Start Ranking'}</span>
+                    {items.length > 0 && !isSaving && (
+                      <span className="text-sm font-normal opacity-80">({items.length})</span>
+                    )}
+                  </Button>
+                </motion.div>
+
+                {/* Save List Only Button */}
+                {user && (
+                  <Button
+                    onClick={handleSaveListOnly}
+                    variant="secondary"
+                    fullWidth
+                    size="md"
+                    disabled={!canSave || isSaving}
+                    className="w-full"
+                  >
+                    {isSaving ? 'Saving...' : 'Save List Only'}
+                  </Button>
+                )}
+              </div>
 
               {items.length > 0 && items.length < 3 && (
                 <motion.p
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-xs text-red-400 text-center"
+                  className="text-xs text-white/40 text-center"
                 >
-                  Add {3 - items.length} more {3 - items.length === 1 ? 'item' : 'items'} to continue
+                  Add {3 - items.length} more {3 - items.length === 1 ? 'item' : 'items'} to start ranking (or save the list as-is)
                 </motion.p>
               )}
             </div>
