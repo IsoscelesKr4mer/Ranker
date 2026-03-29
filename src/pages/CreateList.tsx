@@ -617,45 +617,50 @@ export default function CreateList() {
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             const isAdded = addedSearchIds.has(result.id);
                             return (
-                              <div key={result.id} className={`relative min-w-0 ${isMusic ? 'aspect-square' : 'aspect-[2/3]'}`}>
-                                <motion.button
+                              <div key={result.id} className={`relative min-w-0 rounded-lg overflow-hidden ${isMusic ? 'aspect-square' : 'aspect-[2/3]'}`}>
+                                <button
                                   onClick={() => handleAddSearchResult(result)}
-                                  className="group absolute inset-0 rounded-lg overflow-hidden"
-                                  whileHover={{ scale: isAdded ? 1.0 : 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
+                                  className="group absolute inset-0"
                                 >
-                                  {imageUrl ? (
-                                    <img
-                                      src={imageUrl}
-                                      alt={displayTitle}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
-                                      {isMusic ? <Music className="w-5 h-5 text-white/30" /> : isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
-                                    </div>
-                                  )}
-                                  {isAdded ? (
-                                    <div className="absolute inset-0 bg-emerald-500/40 group-hover:bg-red-500/40 transition-colors flex items-center justify-center">
-                                      <div className="w-7 h-7 rounded-full bg-emerald-500 group-hover:bg-red-500 transition-colors flex items-center justify-center">
-                                        <svg className="w-4 h-4 text-white group-hover:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <X className="w-4 h-4 text-white hidden group-hover:block" />
+                                  <motion.div
+                                    className="absolute inset-0"
+                                    whileHover={{ scale: isAdded ? 1.0 : 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    style={{ willChange: 'transform' }}
+                                  >
+                                    {imageUrl ? (
+                                      <img
+                                        src={imageUrl}
+                                        alt={displayTitle}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 flex items-center justify-center">
+                                        {isMusic ? <Music className="w-5 h-5 text-white/30" /> : isGame ? <Gamepad2 className="w-5 h-5 text-white/30" /> : <Film className="w-5 h-5 text-white/30" />}
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Plus className="w-6 h-6 text-white" />
-                                    </div>
-                                  )}
-                                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                                    <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
-                                    {displayYear && (
-                                      <p className="text-xs text-white/50">{displayYear}</p>
                                     )}
-                                  </div>
-                                </motion.button>
+                                    {isAdded ? (
+                                      <div className="absolute inset-0 bg-emerald-500/40 group-hover:bg-red-500/40 transition-colors flex items-center justify-center">
+                                        <div className="w-7 h-7 rounded-full bg-emerald-500 group-hover:bg-red-500 transition-colors flex items-center justify-center">
+                                          <svg className="w-4 h-4 text-white group-hover:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                          <X className="w-4 h-4 text-white hidden group-hover:block" />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="absolute inset-0 bg-black/50 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Plus className="w-6 h-6 text-white" />
+                                      </div>
+                                    )}
+                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                                      <p className="text-xs text-white font-semibold line-clamp-2">{displayTitle}</p>
+                                      {displayYear && (
+                                        <p className="text-xs text-white/50">{displayYear}</p>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                </button>
                               </div>
                             );
                           })
