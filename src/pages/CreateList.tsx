@@ -6,7 +6,6 @@ import {
   AlertCircle, Image as ImageIcon, Upload, Import, ChevronDown,
   List, ArrowRight,
 } from 'lucide-react';
-import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
