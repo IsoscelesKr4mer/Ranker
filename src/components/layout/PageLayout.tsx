@@ -19,7 +19,7 @@ export function PageLayout({ children, hideNav = false, maxWidth = 'lg' }: PageL
   return (
     <div className="min-h-screen min-h-dvh bg-bg-primary">
       {!hideNav && <Navbar />}
-      <main className={`${widths[maxWidth]} mx-auto px-8 sm:px-12 py-10 sm:py-14`}>
+      <main className={`${widths[maxWidth]} mx-auto px-8 sm:px-12 py-10 sm:py-14 overflow-x-clip`}>
         {children}
       </main>
     </div>
