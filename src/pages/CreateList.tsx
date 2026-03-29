@@ -809,7 +809,7 @@ export default function CreateList() {
                     {/* Letterboxd */}
                     <div className="space-y-3">
                       <label className="block text-xs font-semibold text-white/45 uppercase tracking-wider">Import from Letterboxd</label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           type="url"
                           placeholder="letterboxd.com/username/list/…"
@@ -828,7 +828,7 @@ export default function CreateList() {
                         <button
                           onClick={() => { if (isValidLetterboxdUrl(letterboxdUrl)) handleLetterboxdImport(); else setLetterboxdValidation('invalid'); }}
                           disabled={!letterboxdUrl.trim() || letterboxdImporting}
-                          className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-violet-600/20 border border-violet-500/25 text-violet-300 text-sm font-semibold hover:bg-violet-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97]"
+                          className="flex-shrink-0 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-violet-600/20 border border-violet-500/25 text-violet-300 text-sm font-semibold hover:bg-violet-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97]"
                         >
                           {letterboxdImporting ? <><Spinner /> Importing…</> : <><Import className="w-3.5 h-3.5" /> Import</>}
                         </button>
