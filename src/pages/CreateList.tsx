@@ -620,9 +620,8 @@ export default function CreateList() {
                               <div key={result.id} className="relative w-full" style={{ paddingBottom: isMusic ? '100%' : '150%' }}>
                                 <motion.button
                                   onClick={() => handleAddSearchResult(result)}
-                                  disabled={isAdded}
-                                  className={`group absolute inset-0 rounded-lg overflow-hidden ${isAdded ? 'cursor-default' : ''}`}
-                                  whileHover={{ scale: 1.05 }}
+                                  className="group absolute inset-0 rounded-lg overflow-hidden"
+                                  whileHover={{ scale: isAdded ? 1.0 : 1.05 }}
                                   whileTap={{ scale: 0.95 }}
                                 >
                                   {imageUrl ? (
@@ -637,11 +636,12 @@ export default function CreateList() {
                                     </div>
                                   )}
                                   {isAdded ? (
-                                    <div className="absolute inset-0 bg-emerald-500/40 flex items-center justify-center">
-                                      <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center">
-                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <div className="absolute inset-0 bg-emerald-500/40 group-hover:bg-red-500/40 transition-colors flex items-center justify-center">
+                                      <div className="w-7 h-7 rounded-full bg-emerald-500 group-hover:bg-red-500 transition-colors flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-white group-hover:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
+                                        <X className="w-4 h-4 text-white hidden group-hover:block" />
                                       </div>
                                     </div>
                                   ) : (
@@ -870,7 +870,7 @@ export default function CreateList() {
 
           {/* Right Column: Items List */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            <div className="sticky top-24 space-y-4">
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="font-semibold text-white">Items Added</h3>
@@ -884,7 +884,7 @@ export default function CreateList() {
 
                 {/* Items Scroll */}
                 <div className="space-y-2 max-h-[40vh] overflow-y-auto">
-                  <AnimatePresence mode="popLayout">
+                  <AnimatePresence>
                     {items.length > 0 ? (
                       items.map((item) => (
                         <motion.div
