@@ -20,24 +20,28 @@ export async function saveList(params: {
   if (!user) return { error: 'Not authenticated' };
 
   // Create the list
+  const insertData: Record<string, unknown> = {
+    creator_id: user.id,
+    title: params.title,
+    description: params.description,
+    category: params.category,
+    source: params.source,
+    is_public: params.isPublic ?? false,
+    is_community: params.isCommunity ?? false,
+    item_count: params.items.length,
+    cover_image_url: params.coverImageUrl || params.items[0]?.imageUrl,
+  };
+
   const { data: list, error: listError } = await supabase
     .from('lists')
-    .insert({
-      creator_id: user.id,
-      title: params.title,
-      description: params.description,
-      category: params.category,
-      source: params.source,
-      is_public: params.isPublic ?? false,
-      is_community: params.isCommunity ?? false,
-      tags: params.tags && params.tags.length > 0 ? params.tags : null,
-      item_count: params.items.length,
-      cover_image_url: params.coverImageUrl || params.items[0]?.imageUrl,
-    })
+    .insert(insertData)
     .select('id')
     .single();
 
-  if (listError || !list) return { error: listError?.message || 'Failed to create list' };
+  if (listError || !list) {
+    console.error('saveList error:', listError);
+    return { error: listError?.message || 'Failed to create list' };
+  }
 
   // Insert all items
   const items = params.items.map((item, index) => ({
@@ -75,13 +79,19 @@ export async function getUserLists(): Promise<RankList[]> {
 export async function getCommunityLists(): Promise<RankList[]> {
   if (!isSupabaseConfigured()) return [];
 
+  // Try with profiles join first, fall back to without if it fails
   const { data, error } = await supabase
     .from('lists')
-    .select('*, list_items(*), profiles(display_name)')
+    .select('*, list_items(*)')
     .eq('is_community', true)
     .order('created_at', { ascending: false });
 
-  if (error || !data) return [];
+  if (error) {
+    console.error('getCommunityLists error:', error);
+    return [];
+  }
+
+  if (!data) return [];
 
   return data.map(dbListToRankList);
 }

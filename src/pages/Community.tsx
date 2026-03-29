@@ -16,7 +16,11 @@ export default function Community() {
 
   useEffect(() => {
     getCommunityLists().then((data) => {
+      console.log('Community lists loaded:', data.length, data);
       setLists(data);
+      setLoading(false);
+    }).catch((err) => {
+      console.error('Community lists fetch error:', err);
       setLoading(false);
     });
   }, []);
