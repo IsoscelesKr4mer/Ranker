@@ -114,47 +114,56 @@ export function ImageLibrary({
         ),
       ]);
 
-      // Resolve final URLs and update statuses
+      // Resolve final URLs synchronously from results BEFORE any state updates.
+      // This is critical: React state updater functions (setState(fn)) are scheduled
+      // and do not execute synchronously. If we populated finalUrls inside the updater,
+      // it would still be empty {} when onItemsCreated runs — causing blob: URLs to be
+      // saved to the database instead of the real Supabase public URLs.
       const finalUrls: Record<string, string> = {};
+      results.forEach(settled => {
+        if (settled.status === 'fulfilled') {
+          const { index, result } = settled.value;
+          const entry = newImages[index];
+          if ('url' in result) {
+            // Supabase succeeded — permanent public URL
+            finalUrls[entry.id] = result.url;
+          } else {
+            // Supabase failed — fall back to compressed data URL (survives navigation)
+            const dataUrl = dataUrls[index];
+            if (dataUrl) finalUrls[entry.id] = dataUrl;
+          }
+        }
+      });
 
       onImagesChange(prev => {
         const next = [...prev];
-        results.forEach(settled => {
-          if (settled.status === 'fulfilled') {
-            const { index, result } = settled.value;
-            const entry = newImages[index];
-            const entryIndex = next.findIndex(img => img.id === entry.id);
-            if (entryIndex !== -1) {
-              if ('url' in result) {
-                // Supabase succeeded — use the permanent public URL
-                URL.revokeObjectURL(next[entryIndex].url);
-                next[entryIndex] = { ...next[entryIndex], url: result.url, status: 'ready' };
-                finalUrls[entry.id] = result.url;
-              } else {
-                // Supabase failed — use the compressed data URL (stable across navigation)
-                const dataUrl = dataUrls[index];
-                URL.revokeObjectURL(next[entryIndex].url);
-                next[entryIndex] = {
-                  ...next[entryIndex],
-                  url: dataUrl || next[entryIndex].url,
-                  status: 'ready',
-                };
-                finalUrls[entry.id] = dataUrl || next[entryIndex].url;
-              }
-            }
+        newImages.forEach(entry => {
+          const entryIndex = next.findIndex(img => img.id === entry.id);
+          if (entryIndex !== -1) {
+            const finalUrl = finalUrls[entry.id];
+            URL.revokeObjectURL(next[entryIndex].url);
+            next[entryIndex] = {
+              ...next[entryIndex],
+              url: finalUrl || next[entryIndex].url,
+              status: finalUrl ? 'ready' : 'error',
+              error: finalUrl ? undefined : 'Upload failed',
+            };
           }
         });
         return next;
       });
 
-      // Auto-create items from filenames when not in pick mode
+      // Auto-create items from filenames when not in pick mode.
+      // finalUrls is now fully populated, so imageUrl will be the real Supabase URL.
       if (onItemsCreated && !pickMode) {
-        const autoItems = newImages.map(img => ({
-          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          title: filenameToTitle(img.name),
-          imageUrl: finalUrls[img.id] || img.url,
-        }));
-        onItemsCreated(autoItems);
+        const autoItems = newImages
+          .filter(img => finalUrls[img.id])
+          .map(img => ({
+            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: filenameToTitle(img.name),
+            imageUrl: finalUrls[img.id],
+          }));
+        if (autoItems.length > 0) onItemsCreated(autoItems);
       }
     },
     [images, onImagesChange, onItemsCreated, pickMode]
@@ -329,43 +338,36 @@ export function ImageLibrary({
                       </div>
                     )}
                   </button>
-                    );
-                  })()}
+                  );
+                })()}
 
-                  {/* Remove button */}
-                  {!pickMode && (
-                    <motion.button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemove(img.id);
-                      }}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <X className="w-3 h-3" />
-                    </motion.button>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+                {/* Remove button — visible on hover, non-pick mode */}
+                {!pickMode && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(img.id)}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-500/80"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Compact upload for pick mode */}
-      {pickMode && (
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-white/[0.12] hover:border-white/[0.25] hover:bg-white/[0.03] text-white/50 hover:text-white/70 transition-all text-xs"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {images.length === 0 ? 'Upload an image' : 'Upload more'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
+    {/* Pick mode: allow uploading more images */}
+    {pickMode && (
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        className="w-full text-xs text-white/40 hover:text-white/60 py-2 transition-colors"
+      >
+        + Upload more images
+      </button>
+    )}
+  </div>
+);
 }

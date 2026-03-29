@@ -894,129 +894,70 @@ export default function CreateList() {
 
                     {/* Image Library */}
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-xs font-semibold text-white/45 uppercase tracking-wider">Image Library</label>
-                        {libraryImages.length > 0 && (
-                          <span className="text-xs text-white/25">{libraryImages.filter(i => i.status === 'ready').length} ready</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-white/30">Upload images to auto-create items. Click any unused image to add it.</p>
+                      <label className="block text-xs font-semibold text-white/45 uppercase tracking-wider">Image Library</label>
+                      <p className="text-xs text-white/30">
+                        Upload images to auto-create items. Click any unused image to add it.
+                      </p>
                       <ImageLibrary
                         images={libraryImages}
                         onImagesChange={setLibraryImages}
-                        onItemsCreated={handleImageItemsCreated}
                         onSelectImage={handleLibraryImageClick}
-                        inUseUrls={new Set(items.filter(i => i.imageUrl).map(i => i.imageUrl as string))}
+                        onItemsCreated={handleImageItemsCreated}
+                        inUseUrls={new Set(items.map(i => i.imageUrl).filter((u): u is string => Boolean(u)))}
                       />
                     </div>
+
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Spacer for mobile fixed bar */}
-          <div className="h-6 lg:hidden" />
         </div>
 
-        {/* ── Right sidebar: desktop only ───────────────────────────────────── */}
-        <div className="hidden lg:block">
-          <div className="sticky top-40">
-            <div className="bg-white/[0.035] border border-white/[0.08] rounded-2xl p-5 backdrop-blur-sm">
-              <ItemsPanel />
-            </div>
+        {/* ── Right column: items panel ──────────────────────────────────── */}
+        <div className="hidden lg:block mt-8 lg:mt-0">
+          <div className="sticky top-36">
+            <ItemsPanel />
           </div>
         </div>
+
       </div>
 
-      {/* ── Mobile: floating action bar ─────────────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
-        <div className="bg-[#060610]/95 backdrop-blur-xl border-t border-white/[0.08] px-4 py-3 pb-safe">
-          <div className="flex items-center gap-2.5 max-w-xl mx-auto">
-            {/* Items count / tray trigger */}
-            <button
-              onClick={() => setIsTrayOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/[0.07] border border-white/[0.10] text-white/70 hover:bg-white/[0.10] transition-colors active:scale-[0.97]"
-            >
-              <List className="w-4 h-4" />
-              <span className="text-sm font-semibold">{items.length}</span>
-              {items.length > 0 && items.length < 3 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              )}
-            </button>
-
-            {/* Start ranking CTA */}
-            <button
-              onClick={canStartRanking ? handleStartRanking : () => setIsTrayOpen(true)}
-              disabled={isSaving}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50 ${
-                canStartRanking
-                  ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-600/25'
-                  : 'bg-white/[0.05] text-white/35 border border-white/[0.08] cursor-default'
-              }`}
-            >
-              {isSaving ? (
-                <><Spinner /> Saving…</>
-              ) : canStartRanking ? (
-                <>Start Ranking <ArrowRight className="w-4 h-4" /></>
-              ) : (
-                <>{items.length === 0 ? 'Add items to begin' : `${3 - items.length} more needed`}</>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Mobile: items bottom tray ────────────────────────────────────── */}
-      <AnimatePresence>
-        {isTrayOpen && (
-          <>
-            {/* Backdrop */}
+      {/* ── Mobile items panel (collapsible tray) ─────────────────────────── */}
+      <div className="lg:hidden mt-6 border border-white/[0.07] rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setIsTrayOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium text-white/60 hover:text-white/80 hover:bg-white/[0.03] transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <List className="w-4 h-4" />
+            Items
+            <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-bold ${
+              items.length >= 3 ? 'bg-violet-600/30 text-violet-300' : 'bg-white/[0.08] text-white/40'
+            }`}>{items.length}</span>
+          </span>
+          <motion.div animate={{ rotate: isTrayOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown className="w-4 h-4" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {isTrayOpen && (
             <motion.div
-              key="tray-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsTrayOpen(false)}
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
-            />
-
-            {/* Tray panel */}
-            <motion.div
-              key="tray-panel"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0b0b1e] border-t border-white/[0.10] rounded-t-3xl max-h-[85dvh] flex flex-col"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-white/[0.07]"
             >
-              {/* Handle */}
-              <div className="flex-shrink-0 flex items-center justify-between px-5 pt-4 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-1 rounded-full bg-white/15 absolute left-1/2 -translate-x-1/2 top-3" />
-                  <h2 className="text-sm font-bold text-white/85 mt-1">
-                    Your List
-                    {items.length > 0 && (
-                      <span className="ml-2 px-1.5 py-0.5 rounded text-xs font-bold bg-violet-600/30 text-violet-300">{items.length}</span>
-                    )}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setIsTrayOpen(false)}
-                  className="p-1.5 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Scrollable content */}
-              <div className="flex-1 overflow-y-auto px-5 pb-28">
+              <div className="p-5">
                 <ItemsPanel isMobile />
               </div>
             </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </div>
+
     </PageLayout>
   );
 }
