@@ -590,7 +590,7 @@ export default function CreateList() {
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
-                        className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-[28rem] overflow-y-auto"
+                        className="grid grid-cols-3 sm:grid-cols-4 gap-2.5"
                       >
                         {isSearching ? (
                           <div className="col-span-full py-8 text-center">
@@ -883,15 +883,15 @@ export default function CreateList() {
                 </div>
 
                 {/* Items Scroll */}
-                <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+                <div className="space-y-2 lg:max-h-80 lg:overflow-y-auto">
                   <AnimatePresence>
                     {items.length > 0 ? (
                       items.map((item) => (
                         <motion.div
                           key={item.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
                           className="space-y-2"
                         >
                           <div className="flex items-center gap-2 p-2 bg-white/[0.03] border border-white/[0.06] rounded-lg group hover:bg-white/[0.05] transition-colors">
