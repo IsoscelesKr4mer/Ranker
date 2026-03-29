@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen, AlertCircle, Image as ImageIcon, Upload, Import } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
@@ -15,21 +15,22 @@ import type { LibraryImage } from '@/components/ImageLibrary';
 import type { RankItem } from '@/types';
 
 const CATEGORIES = [
-  { id: 'movies', label: 'Movies', icon: Film },
-  { id: 'tv', label: 'TV', icon: Film },
-  { id: 'games', label: 'Games', icon: Gamepad2 },
-  { id: 'music', label: 'Music', icon: Music },
-  { id: 'food', label: 'Food', icon: Utensils },
-  { id: 'custom', label: 'Custom', icon: BookOpen },
+  { id: 'Movies', label: 'Movies', icon: Film },
+  { id: 'TV', label: 'TV', icon: Film },
+  { id: 'Games', label: 'Games', icon: Gamepad2 },
+  { id: 'Music', label: 'Music', icon: Music },
+  { id: 'Food', label: 'Food', icon: Utensils },
+  { id: 'Custom', label: 'Custom', icon: BookOpen },
 ];
 
 export default function CreateList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
 
   // Form state
   const [listTitle, setListTitle] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('custom');
+  const [selectedCategory, setSelectedCategory] = useState('Custom');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
   const [isCommunity, setIsCommunity] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
@@ -72,7 +73,7 @@ export default function CreateList() {
         })
       );
       setItems(prev => [...prev, ...enhanced]);
-      setSelectedCategory('movies');
+      setSelectedCategory('Movies');
       setLetterboxdSuccess(enhanced.length);
       setLetterboxdUrl('');
       setLetterboxdValidation('idle');
@@ -84,6 +85,54 @@ export default function CreateList() {
       setLetterboxdImporting(false);
     }
   }, [letterboxdUrl]);
+
+  // Auto-import if arriving from Browse page with a Letterboxd URL
+  const hasAutoImported = useRef(false);
+  useEffect(() => {
+    const state = location.state as { letterboxdUrl?: string } | null;
+    if (state?.letterboxdUrl && !hasAutoImported.current) {
+      hasAutoImported.current = true;
+      setLetterboxdUrl(state.letterboxdUrl);
+      // Trigger import directly since setLetterboxdUrl won't update in time for the callback
+      (async () => {
+        setLetterboxdImporting(true);
+        setLetterboxdError(null);
+        try {
+          const imported = await importLetterboxdList(state.letterboxdUrl!);
+          if (imported.length === 0) {
+            setLetterboxdError('No films found. Make sure the list is public and the URL is correct.');
+            setLetterboxdImporting(false);
+            return;
+          }
+          const enhanced = await Promise.all(
+            imported.map(async (item) => {
+              try {
+                const { movies } = await searchMovies(item.title);
+                if (movies.length > 0 && movies[0].poster_path) {
+                  return {
+                    ...item,
+                    imageUrl: `https://image.tmdb.org/t/p/w500${movies[0].poster_path}`,
+                    subtitle: movies[0].release_date?.slice(0, 4) || item.subtitle,
+                  };
+                }
+              } catch { /* keep original */ }
+              return item;
+            })
+          );
+          setItems(enhanced);
+          setSelectedCategory('Movies');
+          setLetterboxdSuccess(enhanced.length);
+          setLetterboxdUrl('');
+          setTimeout(() => setLetterboxdSuccess(null), 5000);
+        } catch (err) {
+          console.error('Letterboxd import failed:', err);
+          setLetterboxdError('Failed to import from Letterboxd. Please check the URL and try again.');
+        } finally {
+          setLetterboxdImporting(false);
+        }
+      })();
+    }
+  }, [location.state]);
 
   // TMDb search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -115,13 +164,13 @@ export default function CreateList() {
     const performSearch = async () => {
       setIsSearching(true);
       try {
-        if (selectedCategory === 'games') {
+        if (selectedCategory === 'Games') {
           const { games } = await searchGames(searchQuery);
           setSearchResults(games || []);
-        } else if (selectedCategory === 'tv') {
+        } else if (selectedCategory === 'TV') {
           const { shows } = await searchTV(searchQuery);
           setSearchResults(shows || []);
-        } else if (selectedCategory === 'music') {
+        } else if (selectedCategory === 'Music') {
           const { results } = await searchMusic(searchQuery, musicSearchType);
           setSearchResults(results || []);
         } else {
@@ -147,11 +196,11 @@ export default function CreateList() {
 
   const handleAddSearchResult = useCallback((result: any) => {
     let rankItem;
-    if (selectedCategory === 'games') {
+    if (selectedCategory === 'Games') {
       rankItem = igdbToRankItem(result);
-    } else if (selectedCategory === 'tv') {
+    } else if (selectedCategory === 'TV') {
       rankItem = tmdbTVToRankItem(result);
-    } else if (selectedCategory === 'music') {
+    } else if (selectedCategory === 'Music') {
       rankItem = deezerToRankItem(result);
     } else {
       rankItem = tmdbToRankItem(result);
@@ -416,7 +465,7 @@ export default function CreateList() {
     }
   };
 
-  const isSearchableCategory = selectedCategory === 'movies' || selectedCategory === 'tv' || selectedCategory === 'games' || selectedCategory === 'music';
+  const isSearchableCategory = selectedCategory === 'Movies' || selectedCategory === 'TV' || selectedCategory === 'Games' || selectedCategory === 'Music';
   const canStartRanking = items.length >= 3 && listTitle.trim();
   const canSave = items.length > 0 && listTitle.trim() && user;
 
@@ -478,11 +527,11 @@ export default function CreateList() {
               <Card padding="lg" className="space-y-4">
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-white/60">
-                    Search {selectedCategory === 'movies' ? 'Movies' : selectedCategory === 'tv' ? 'TV Shows' : selectedCategory === 'games' ? 'Games' : musicSearchType === 'album' ? 'Albums' : musicSearchType === 'artist' ? 'Artists' : 'Songs'}
+                    Search {selectedCategory === 'Movies' ? 'Movies' : selectedCategory === 'TV' ? 'TV Shows' : selectedCategory === 'Games' ? 'Games' : musicSearchType === 'album' ? 'Albums' : musicSearchType === 'artist' ? 'Artists' : 'Songs'}
                   </label>
 
                   {/* Music sub-type picker */}
-                  {selectedCategory === 'music' && (
+                  {selectedCategory === 'Music' && (
                     <div className="flex gap-1.5">
                       {([['track', 'Songs'], ['album', 'Albums'], ['artist', 'Artists']] as const).map(([type, label]) => (
                         <button
@@ -504,7 +553,7 @@ export default function CreateList() {
                     <Search className="absolute left-4 top-3.5 w-4 h-4 text-white/25 pointer-events-none" />
                     <Input
                       type="text"
-                      placeholder={`Search ${selectedCategory === 'movies' ? 'movies' : selectedCategory === 'tv' ? 'TV shows' : selectedCategory === 'games' ? 'games' : musicSearchType === 'album' ? 'albums' : musicSearchType === 'artist' ? 'artists' : 'songs'}...`}
+                      placeholder={`Search ${selectedCategory === 'Movies' ? 'movies' : selectedCategory === 'TV' ? 'TV shows' : selectedCategory === 'Games' ? 'games' : musicSearchType === 'album' ? 'albums' : musicSearchType === 'artist' ? 'artists' : 'songs'}...`}
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       className="pl-12"
@@ -532,8 +581,8 @@ export default function CreateList() {
                           </div>
                         ) : (
                           searchResults.map(result => {
-                            const isGame = selectedCategory === 'games';
-                            const isMusic = selectedCategory === 'music';
+                            const isGame = selectedCategory === 'Games';
+                            const isMusic = selectedCategory === 'Music';
                             const displayTitle = isMusic ? result.title
                               : isGame ? result.name
                               : (result.title || result.name);
