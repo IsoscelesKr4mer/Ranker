@@ -39,6 +39,32 @@ function filenameToTitle(filename: string): string {
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
+/**
+ * Compress an image blob/file to a data URL, resized to max 600px wide.
+ * Produces a stable, self-contained URL that survives page navigation and
+ * can be stored in the database — unlike blob: URLs which are tab-scoped.
+ */
+function compressToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const blobUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 600;
+      const scale = img.width > MAX ? MAX / img.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(blobUrl); resolve(''); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(blobUrl);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(''); };
+    img.src = blobUrl;
+  });
+}
+
 export function ImageLibrary({
   images,
   onImagesChange,
@@ -61,7 +87,7 @@ export function ImageLibrary({
 
       if (fileArray.length === 0) return;
 
-      // Create entries with local object URLs immediately
+      // Create entries with local object URLs immediately for instant preview
       const newImages: LibraryImage[] = fileArray.map((f, i) => ({
         id: `upload-${Date.now()}-${i}`,
         url: URL.createObjectURL(f),
@@ -72,13 +98,21 @@ export function ImageLibrary({
       const updated = [...images, ...newImages];
       onImagesChange(updated);
 
-      // Try to upload to Supabase; fall back to local object URLs
-      const results = await Promise.allSettled(
-        fileArray.map(async (file, i) => {
-          const result = await uploadListImage(file);
-          return { index: i, result };
-        })
-      );
+      // Pre-compute compressed data URLs as navigation-safe fallback.
+      // These survive page transitions and can be stored in the database,
+      // unlike blob: URLs which are tab-scoped and die on navigation.
+      const dataUrlsPromise = Promise.all(fileArray.map(f => compressToDataUrl(f)));
+
+      // Try to upload to Supabase in parallel
+      const [dataUrls, results] = await Promise.all([
+        dataUrlsPromise,
+        Promise.allSettled(
+          fileArray.map(async (file, i) => {
+            const result = await uploadListImage(file);
+            return { index: i, result };
+          })
+        ),
+      ]);
 
       // Resolve final URLs and update statuses
       const finalUrls: Record<string, string> = {};
@@ -92,20 +126,20 @@ export function ImageLibrary({
             const entryIndex = next.findIndex(img => img.id === entry.id);
             if (entryIndex !== -1) {
               if ('url' in result) {
+                // Supabase succeeded — use the permanent public URL
+                URL.revokeObjectURL(next[entryIndex].url);
+                next[entryIndex] = { ...next[entryIndex], url: result.url, status: 'ready' };
+                finalUrls[entry.id] = result.url;
+              } else {
+                // Supabase failed — use the compressed data URL (stable across navigation)
+                const dataUrl = dataUrls[index];
                 URL.revokeObjectURL(next[entryIndex].url);
                 next[entryIndex] = {
                   ...next[entryIndex],
-                  url: result.url,
+                  url: dataUrl || next[entryIndex].url,
                   status: 'ready',
                 };
-                finalUrls[entry.id] = result.url;
-              } else {
-                // Supabase failed — keep the local object URL so it still works
-                next[entryIndex] = {
-                  ...next[entryIndex],
-                  status: 'ready',
-                };
-                finalUrls[entry.id] = next[entryIndex].url;
+                finalUrls[entry.id] = dataUrl || next[entryIndex].url;
               }
             }
           }
