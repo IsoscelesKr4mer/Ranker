@@ -617,7 +617,7 @@ export default function CreateList() {
                               : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                             const isAdded = addedSearchIds.has(result.id);
                             return (
-                              <div key={result.id} className="relative w-full" style={{ paddingBottom: isMusic ? '100%' : '150%' }}>
+                              <div key={result.id} className={`relative min-w-0 ${isMusic ? 'aspect-square' : 'aspect-[2/3]'}`}>
                                 <motion.button
                                   onClick={() => handleAddSearchResult(result)}
                                   className="group absolute inset-0 rounded-lg overflow-hidden"
