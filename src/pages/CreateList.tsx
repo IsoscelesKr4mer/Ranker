@@ -751,8 +751,8 @@ export default function CreateList() {
             </div>
           )}
 
-          {/* Sort controls — shown when year-browse mode is active */}
-          {selectedCategory === 'Movies' && yearFilter.length === 4 && !searchQuery && (
+          {/* Sort controls — shown whenever year filter is active for Movies */}
+          {selectedCategory === 'Movies' && yearFilter.length === 4 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-white/35 font-medium shrink-0">Sort by</span>
               {(
@@ -768,9 +768,13 @@ export default function CreateList() {
                   onClick={() => {
                     if (discoverSortBy !== opt.value) {
                       setDiscoverSortBy(opt.value);
-                      setDiscoverPage(1);
-                      setDiscoverTotalPages(1);
-                      setSearchResults([]);
+                      // Year-browse mode: refetch from server with new sort
+                      if (!searchQuery) {
+                        setDiscoverPage(1);
+                        setDiscoverTotalPages(1);
+                        setSearchResults([]);
+                      }
+                      // Text-search mode: results are sorted client-side, no refetch needed
                     }
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -803,7 +807,15 @@ export default function CreateList() {
                   <div className="py-12 text-center text-white/25 text-sm">No results found</div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
-                    {searchResults.map(result => {
+                    {(searchQuery && selectedCategory === 'Movies' && yearFilter.length === 4
+                      ? [...searchResults].sort((a, b) => {
+                          if (discoverSortBy === 'title.asc') return (a.title || '').localeCompare(b.title || '');
+                          if (discoverSortBy === 'title.desc') return (b.title || '').localeCompare(a.title || '');
+                          if (discoverSortBy === 'release_date.desc') return (b.release_date || '').localeCompare(a.release_date || '');
+                          return (a.release_date || '').localeCompare(b.release_date || ''); // release_date.asc default
+                        })
+                      : searchResults
+                    ).map(result => {
                       const isGame = selectedCategory === 'Games';
                       const isMusic = selectedCategory === 'Music';
                       const displayTitle = isMusic ? result.title : isGame ? result.name : (result.title || result.name);
