@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2 } from 'lucide-react';
-import { Button, Card } from '@/components/ui';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2, UserCircle, Check, AlertCircle } from 'lucide-react';
+import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -12,16 +12,24 @@ import {
   getInProgressSessions,
   deleteResult,
   deleteList,
+  updateProfile,
+  isUsernameTaken,
 } from '@/lib/database';
 import type { RankList, RankingSession } from '@/types';
 
 export default function Dashboard() {
-  const { user, status } = useAuthStore();
+  const { user, status, needsUsername, setUser, setNeedsUsername } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ listsCreated: 0, rankingsCompleted: 0, comparisonsMade: 0 });
   const [lists, setLists] = useState<RankList[]>([]);
   const [results, setResults] = useState<any[]>([]);
   const [inProgress, setInProgress] = useState<RankingSession[]>([]);
+
+  // Username setup state
+  const [usernameInput, setUsernameInput] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSuccess, setUsernameSuccess] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -102,7 +110,31 @@ export default function Dashboard() {
     );
   }
 
-  const displayName = user?.displayName || 'Ranker';
+  const handleSetUsername = useCallback(async () => {
+    const trimmed = usernameInput.trim().toLowerCase();
+    if (!trimmed) { setUsernameError('Username is required'); return; }
+    if (trimmed.length < 3) { setUsernameError('At least 3 characters'); return; }
+    if (trimmed.length > 24) { setUsernameError('Max 24 characters'); return; }
+    if (!/^[a-z0-9_-]+$/.test(trimmed)) { setUsernameError('Only lowercase letters, numbers, hyphens, underscores'); return; }
+
+    setUsernameSaving(true);
+    setUsernameError('');
+
+    const taken = await isUsernameTaken(trimmed, user?.id);
+    if (taken) { setUsernameError('Username already taken'); setUsernameSaving(false); return; }
+
+    const result = await updateProfile({ username: trimmed });
+    if (result.error) { setUsernameError(result.error); setUsernameSaving(false); return; }
+
+    // Update local state
+    if (user) setUser({ ...user, username: trimmed });
+    setNeedsUsername(false);
+    setUsernameSuccess(true);
+    setTimeout(() => setUsernameSuccess(false), 3000);
+    setUsernameSaving(false);
+  }, [usernameInput, user, setUser, setNeedsUsername]);
+
+  const displayName = user?.username || user?.displayName || 'Ranker';
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -194,6 +226,82 @@ export default function Dashboard() {
             Track your rankings, discover new lists, and connect with the community
           </p>
         </motion.div>
+
+        {/* Username Setup Banner */}
+        <AnimatePresence>
+          {needsUsername && !usernameSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: 'auto' }}
+              exit={{ opacity: 0, y: -8, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="p-6 border border-violet-500/30 bg-gradient-to-r from-violet-600/10 to-violet-500/5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center flex-shrink-0">
+                      <UserCircle className="w-5 h-5 text-violet-300" />
+                    </div>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-white">Pick a username</p>
+                      <p className="text-xs text-white/50">
+                        This will be shown on your community lists and profile
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex-1 sm:w-48">
+                      <Input
+                        value={usernameInput}
+                        onChange={(e) => {
+                          setUsernameInput(e.target.value);
+                          setUsernameError('');
+                        }}
+                        placeholder="your-username"
+                        className="text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && handleSetUsername()}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSetUsername}
+                      disabled={usernameSaving || !usernameInput.trim()}
+                    >
+                      {usernameSaving ? '...' : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+                {usernameError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-1.5 mt-3 text-xs text-red-400"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {usernameError}
+                  </motion.div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Username Success Toast */}
+        <AnimatePresence>
+          {usernameSuccess && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300"
+            >
+              <Check className="w-4 h-4" />
+              Username saved! You're all set.
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Stats Cards */}
         <motion.div

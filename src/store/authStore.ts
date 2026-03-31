@@ -5,15 +5,46 @@ import type { User, AuthStatus } from '@/types';
 interface AuthState {
   user: User | null;
   status: AuthStatus;
+  needsUsername: boolean;
   initialize: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  setUser: (user: User) => void;
+  setNeedsUsername: (needs: boolean) => void;
+}
+
+async function fetchProfile(userId: string): Promise<{ username?: string; displayName?: string; avatarUrl?: string }> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('username, display_name, avatar_url')
+      .eq('id', userId)
+      .single();
+    return {
+      username: data?.username || undefined,
+      displayName: data?.display_name || undefined,
+      avatarUrl: data?.avatar_url || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function buildUser(sessionUser: { id: string; email?: string; user_metadata?: Record<string, unknown> }, profile: { username?: string; displayName?: string; avatarUrl?: string }): User {
+  return {
+    id: sessionUser.id,
+    email: sessionUser.email || '',
+    displayName: profile.displayName || (sessionUser.user_metadata?.full_name as string) || (sessionUser.user_metadata?.name as string) || undefined,
+    username: profile.username || undefined,
+    avatarUrl: profile.avatarUrl || (sessionUser.user_metadata?.avatar_url as string) || undefined,
+  };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   status: 'loading',
+  needsUsername: false,
 
   initialize: async () => {
     if (!isSupabaseConfigured()) {
@@ -24,33 +55,29 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        const profile = await fetchProfile(session.user.id);
+        const user = buildUser(session.user, profile);
         set({
-          user: {
-            id: session.user.id,
-            email: session.user.email || '',
-            displayName: session.user.user_metadata?.full_name || session.user.user_metadata?.name,
-            avatarUrl: session.user.user_metadata?.avatar_url,
-          },
+          user,
           status: 'authenticated',
+          needsUsername: !profile.username,
         });
       } else {
         set({ status: 'unauthenticated', user: null });
       }
 
       // Listen for auth changes
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
+          const profile = await fetchProfile(session.user.id);
+          const user = buildUser(session.user, profile);
           set({
-            user: {
-              id: session.user.id,
-              email: session.user.email || '',
-              displayName: session.user.user_metadata?.full_name || session.user.user_metadata?.name,
-              avatarUrl: session.user.user_metadata?.avatar_url,
-            },
+            user,
             status: 'authenticated',
+            needsUsername: !profile.username,
           });
         } else {
-          set({ user: null, status: 'unauthenticated' });
+          set({ user: null, status: 'unauthenticated', needsUsername: false });
         }
       });
     } catch {
@@ -85,6 +112,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     if (!isSupabaseConfigured()) return;
     await supabase.auth.signOut();
-    set({ user: null, status: 'unauthenticated' });
+    set({ user: null, status: 'unauthenticated', needsUsername: false });
   },
+
+  setUser: (user: User) => set({ user }),
+  setNeedsUsername: (needs: boolean) => set({ needsUsername: needs }),
 }));

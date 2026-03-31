@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { RankItem, RankList, RankingSession, MergeSortState } from '@/types';
+import type { RankItem, RankList, RankingSession, MergeSortState, PublicProfile } from '@/types';
 
 // ─── Lists ─────────────────────────────────────────────────────────
 
@@ -79,7 +79,6 @@ export async function getUserLists(): Promise<RankList[]> {
 export async function getCommunityLists(): Promise<RankList[]> {
   if (!isSupabaseConfigured()) return [];
 
-  // Try with profiles join first, fall back to without if it fails
   const { data, error } = await supabase
     .from('lists')
     .select('*, list_items(*)')
@@ -93,7 +92,24 @@ export async function getCommunityLists(): Promise<RankList[]> {
 
   if (!data) return [];
 
-  return data.map(dbListToRankList);
+  // Fetch profiles for all unique creator IDs
+  const creatorIds = [...new Set(data.map(d => d.creator_id).filter(Boolean))];
+  const profileMap = new Map<string, { username: string | null; display_name: string | null; avatar_url: string | null }>();
+
+  if (creatorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url')
+      .in('id', creatorIds);
+
+    if (profiles) {
+      for (const p of profiles) {
+        profileMap.set(p.id, p);
+      }
+    }
+  }
+
+  return data.map(d => dbListToRankList(d, profileMap.get(d.creator_id as string)));
 }
 
 export async function deleteList(listId: string): Promise<{ error?: string }> {
@@ -133,7 +149,10 @@ export async function getListById(listId: string): Promise<RankList | null> {
   return dbListToRankList(data);
 }
 
-function dbListToRankList(data: Record<string, unknown>): RankList {
+function dbListToRankList(
+  data: Record<string, unknown>,
+  profile?: { username: string | null; display_name: string | null; avatar_url: string | null } | null,
+): RankList {
   const items = ((data.list_items as Record<string, unknown>[]) || [])
     .sort((a, b) => (a.position as number) - (b.position as number))
     .map((item): RankItem => ({
@@ -143,8 +162,6 @@ function dbListToRankList(data: Record<string, unknown>): RankList {
       subtitle: item.subtitle as string | undefined,
       metadata: item.metadata as Record<string, unknown> | undefined,
     }));
-
-  const profile = data.profiles as Record<string, unknown> | undefined;
 
   return {
     id: data.id as string,
@@ -156,7 +173,7 @@ function dbListToRankList(data: Record<string, unknown>): RankList {
     coverImageUrl: data.cover_image_url as string | undefined,
     itemCount: data.item_count as number,
     creatorId: data.creator_id as string,
-    creatorName: profile?.display_name as string | undefined,
+    creatorName: profile?.username || profile?.display_name || undefined,
     isPublic: data.is_public as boolean,
     createdAt: data.created_at as string,
     updatedAt: data.updated_at as string,
@@ -542,4 +559,108 @@ export async function uploadListImage(file: File): Promise<{ url: string } | { e
     .getPublicUrl(path);
 
   return { url: urlData.publicUrl };
+}
+
+
+// ─── Profiles ─────────────────────────────────────────────────────
+
+export async function updateProfile(params: {
+  username?: string;
+  displayName?: string;
+}): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (params.username !== undefined) updates.username = params.username;
+  if (params.displayName !== undefined) updates.display_name = params.displayName;
+
+  const { error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', user.id);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+export async function isUsernameTaken(username: string, excludeUserId?: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  let query = supabase
+    .from('profiles')
+    .select('id', { count: 'exact', head: true })
+    .ilike('username', username);
+
+  if (excludeUserId) {
+    query = query.neq('id', excludeUserId);
+  }
+
+  const { count } = await query;
+  return (count || 0) > 0;
+}
+
+export async function getPublicProfile(userId: string): Promise<PublicProfile | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url, created_at')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    username: data.username,
+    displayName: data.display_name,
+    avatarUrl: data.avatar_url,
+    createdAt: data.created_at,
+  };
+}
+
+export async function getPublicUserLists(userId: string): Promise<RankList[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  const { data, error } = await supabase
+    .from('lists')
+    .select('*, list_items(*)')
+    .eq('creator_id', userId)
+    .eq('is_community', true)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data.map(d => dbListToRankList(d));
+}
+
+export async function getPublicUserResults(userId: string): Promise<{
+  id: string;
+  listTitle: string;
+  results: RankItem[];
+  comparisonsMade: number;
+  shareId?: string;
+  createdAt: string;
+}[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  const { data, error } = await supabase
+    .from('ranking_results')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_public', true)
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return [];
+
+  return data.map((row) => ({
+    id: row.id,
+    listTitle: row.list_title,
+    results: row.results as RankItem[],
+    comparisonsMade: row.comparisons_made,
+    shareId: row.share_id || undefined,
+    createdAt: row.created_at,
+  }));
 }

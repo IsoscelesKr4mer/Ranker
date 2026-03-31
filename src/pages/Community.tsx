@@ -175,7 +175,18 @@ export default function Community() {
                         {list.title}
                       </h3>
                       <p className="text-xs text-white/50">
-                        by {list.creatorName || 'Community Member'}
+                        by{' '}
+                        {list.creatorId ? (
+                          <Link
+                            to={`/profile/${list.creatorId}`}
+                            className="text-violet-400/70 hover:text-violet-300 transition-colors"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {list.creatorName || 'Community Member'}
+                          </Link>
+                        ) : (
+                          'Community Member'
+                        )}
                       </p>
                     </div>
 

@@ -69,7 +69,16 @@ export interface User {
   id: string;
   email: string;
   displayName?: string;
+  username?: string;
   avatarUrl?: string;
+}
+
+export interface PublicProfile {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
 }
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
