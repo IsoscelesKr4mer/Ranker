@@ -399,6 +399,17 @@ export default function Landing() {
 
           <div className="border-t border-white/[0.06] mt-8 pt-6 text-center text-xs text-white/25">
             <p>&copy; 2026 Ranker. All rights reserved.</p>
+            <p className="mt-2">
+              Inspired by{' '}
+              <a
+                href="https://sorta.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/35 hover:text-violet-400 transition-colors"
+              >
+                sorta.app
+              </a>
+            </p>
           </div>
         </div>
       </footer>
