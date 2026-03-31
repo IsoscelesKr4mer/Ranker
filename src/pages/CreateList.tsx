@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen,
   AlertCircle, Image as ImageIcon, Upload, Import, ChevronDown,
-  List, ArrowRight,
+  List, ArrowRight, Calendar,
 } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
-import { searchMovies, searchTV, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
+import { searchMovies, searchTV, discoverMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
 import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
@@ -150,14 +150,51 @@ export default function CreateList() {
   const [addedSearchIds, setAddedSearchIds] = useState<Set<string | number>>(new Set());
   const searchTimeoutRef = useRef<number | undefined>(undefined);
 
+  // ── Year filter / discover state ──────────────────────────────────────────
+  const [yearFilter, setYearFilter] = useState('');
+  const [discoverPage, setDiscoverPage] = useState(1);
+  const [discoverTotalPages, setDiscoverTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    const hasQuery = searchQuery.trim().length > 0;
+    const hasYear = yearFilter.length === 4 && selectedCategory === 'Movies';
+
+    if (!hasQuery && !hasYear) {
       setSearchResults([]);
       setAddedSearchIds(new Set());
+      setDiscoverPage(1);
+      setDiscoverTotalPages(1);
       return;
     }
+
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
+    // Year-browse mode: no text query, valid year, Movies category
+    if (!hasQuery && hasYear) {
+      const performDiscover = async () => {
+        setIsSearching(true);
+        setDiscoverPage(1);
+        try {
+          const { movies, totalPages } = await discoverMovies({
+            year: parseInt(yearFilter),
+            sortBy: 'release_date.asc',
+            page: 1,
+          });
+          setSearchResults(movies || []);
+          setDiscoverTotalPages(totalPages);
+        } catch (error) {
+          console.error('Discover failed:', error);
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      };
+      searchTimeoutRef.current = setTimeout(performDiscover, 300);
+      return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    }
+
+    // Normal text search
     const performSearch = async () => {
       setIsSearching(true);
       try {
@@ -184,7 +221,27 @@ export default function CreateList() {
 
     searchTimeoutRef.current = setTimeout(performSearch, 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, [searchQuery, selectedCategory, musicSearchType]);
+  }, [searchQuery, yearFilter, selectedCategory, musicSearchType]);
+
+  const loadMoreDiscover = useCallback(async () => {
+    if (discoverPage >= discoverTotalPages || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = discoverPage + 1;
+      const { movies, totalPages } = await discoverMovies({
+        year: parseInt(yearFilter),
+        sortBy: 'release_date.asc',
+        page: nextPage,
+      });
+      setSearchResults(prev => [...prev, ...(movies || [])]);
+      setDiscoverPage(nextPage);
+      setDiscoverTotalPages(totalPages);
+    } catch (error) {
+      console.error('Load more failed:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [discoverPage, discoverTotalPages, yearFilter, isLoadingMore]);
 
   // ── Items state ───────────────────────────────────────────────────────────
   const [items, setItems] = useState<RankItem[]>([]);
@@ -568,7 +625,7 @@ export default function CreateList() {
               return (
                 <button
                   key={cat.id}
-                  onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); setSearchResults([]); }}
+                  onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); setYearFilter(''); setSearchResults([]); }}
                   className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
                     isActive
                       ? 'bg-violet-600 text-white shadow-sm shadow-violet-600/30'
@@ -662,9 +719,38 @@ export default function CreateList() {
             </div>
           )}
 
+          {/* Year filter — Movies only */}
+          {selectedCategory === 'Movies' && (
+            <div className="relative flex items-center">
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
+              <input
+                type="number"
+                min="1888"
+                max={new Date().getFullYear() + 2}
+                placeholder="Browse by year, e.g. 2025"
+                value={yearFilter}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setYearFilter(val);
+                  if (val.length !== 4) { setDiscoverPage(1); setDiscoverTotalPages(1); }
+                }}
+                style={{ fontSize: '16px' }}
+                className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.10] text-white/90 placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/12 hover:border-white/[0.16] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              {yearFilter && (
+                <button
+                  onClick={() => { setYearFilter(''); setDiscoverPage(1); setDiscoverTotalPages(1); if (!searchQuery) setSearchResults([]); }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Search results grid */}
           <AnimatePresence mode="wait">
-            {isSearchableCategory && searchQuery && (
+            {isSearchableCategory && (searchQuery || (yearFilter.length === 4 && selectedCategory === 'Movies')) && (
               <motion.div
                 key="results"
                 initial={{ opacity: 0, y: 6 }}
@@ -747,11 +833,22 @@ export default function CreateList() {
             )}
           </AnimatePresence>
 
+          {/* Load More — year-browse discover mode */}
+          {!searchQuery && yearFilter.length === 4 && selectedCategory === 'Movies' && searchResults.length > 0 && discoverPage < discoverTotalPages && (
+            <button
+              onClick={loadMoreDiscover}
+              disabled={isLoadingMore}
+              className="w-full py-3 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/50 hover:text-white/80 hover:bg-white/[0.08] text-sm font-medium transition-all disabled:opacity-40"
+            >
+              {isLoadingMore ? 'Loading…' : `Load more ${yearFilter} releases`}
+            </button>
+          )}
+
           {/* Empty search state for searchable categories */}
-          {isSearchableCategory && !searchQuery && (
+          {isSearchableCategory && !searchQuery && !(yearFilter.length === 4 && selectedCategory === 'Movies') && (
             <div className="py-10 text-center space-y-2">
               <Search className="w-8 h-8 text-white/10 mx-auto" />
-              <p className="text-sm text-white/25">Search above to find {selectedCategory === 'TV' ? 'TV shows' : selectedCategory.toLowerCase()} to add</p>
+              <p className="text-sm text-white/25">Search above to find {selectedCategory === 'TV' ? 'TV shows' : selectedCategory.toLowerCase()} to add{selectedCategory === 'Movies' ? ', or enter a year below to browse by release date' : ''}</p>
             </div>
           )}
 
