@@ -73,7 +73,7 @@ export async function getUserLists(): Promise<RankList[]> {
 
   if (error || !data) return [];
 
-  return data.map(dbListToRankList);
+  return data.map((d) => dbListToRankList(d));
 }
 
 export async function getCommunityLists(): Promise<RankList[]> {
