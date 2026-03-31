@@ -38,6 +38,7 @@ export async function discoverMovies(options: {
   genreId?: number;
   sortBy?: string;
   page?: number;
+  theatricalOnly?: boolean;
 }): Promise<{ movies: TMDbMovie[]; totalPages: number }> {
   const params = new URLSearchParams({
     api_key: TMDB_API_KEY,
@@ -46,6 +47,8 @@ export async function discoverMovies(options: {
   });
   if (options.year) params.set('primary_release_year', String(options.year));
   if (options.genreId) params.set('with_genres', String(options.genreId));
+  // Release types: 2 = Theatrical Limited, 3 = Theatrical Wide
+  if (options.theatricalOnly) params.set('with_release_type', '2|3');
 
   const res = await fetch(`${BASE_URL}/discover/movie?${params}`);
   const data: TMDbSearchResult = await res.json();

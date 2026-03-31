@@ -152,6 +152,7 @@ export default function CreateList() {
 
   // ── Year filter / discover state ──────────────────────────────────────────
   const [yearFilter, setYearFilter] = useState('');
+  const [discoverSortBy, setDiscoverSortBy] = useState<'release_date.asc' | 'release_date.desc' | 'title.asc' | 'title.desc'>('release_date.asc');
   const [discoverPage, setDiscoverPage] = useState(1);
   const [discoverTotalPages, setDiscoverTotalPages] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -178,8 +179,9 @@ export default function CreateList() {
         try {
           const { movies, totalPages } = await discoverMovies({
             year: parseInt(yearFilter),
-            sortBy: 'release_date.asc',
+            sortBy: discoverSortBy,
             page: 1,
+            theatricalOnly: true,
           });
           setSearchResults(movies || []);
           setDiscoverTotalPages(totalPages);
@@ -221,7 +223,7 @@ export default function CreateList() {
 
     searchTimeoutRef.current = setTimeout(performSearch, 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, [searchQuery, yearFilter, selectedCategory, musicSearchType]);
+  }, [searchQuery, yearFilter, discoverSortBy, selectedCategory, musicSearchType]);
 
   const loadMoreDiscover = useCallback(async () => {
     if (discoverPage >= discoverTotalPages || isLoadingMore) return;
@@ -230,8 +232,9 @@ export default function CreateList() {
       const nextPage = discoverPage + 1;
       const { movies, totalPages } = await discoverMovies({
         year: parseInt(yearFilter),
-        sortBy: 'release_date.asc',
+        sortBy: discoverSortBy,
         page: nextPage,
+        theatricalOnly: true,
       });
       setSearchResults(prev => [...prev, ...(movies || [])]);
       setDiscoverPage(nextPage);
@@ -241,7 +244,7 @@ export default function CreateList() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [discoverPage, discoverTotalPages, yearFilter, isLoadingMore]);
+  }, [discoverPage, discoverTotalPages, yearFilter, discoverSortBy, isLoadingMore]);
 
   // ── Items state ───────────────────────────────────────────────────────────
   const [items, setItems] = useState<RankItem[]>([]);
@@ -745,6 +748,40 @@ export default function CreateList() {
                   <X className="w-4 h-4" />
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Sort controls — shown when year-browse mode is active */}
+          {selectedCategory === 'Movies' && yearFilter.length === 4 && !searchQuery && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-white/35 font-medium shrink-0">Sort by</span>
+              {(
+                [
+                  { value: 'release_date.asc', label: 'Date ↑' },
+                  { value: 'release_date.desc', label: 'Date ↓' },
+                  { value: 'title.asc', label: 'Title A–Z' },
+                  { value: 'title.desc', label: 'Title Z–A' },
+                ] as const
+              ).map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    if (discoverSortBy !== opt.value) {
+                      setDiscoverSortBy(opt.value);
+                      setDiscoverPage(1);
+                      setDiscoverTotalPages(1);
+                      setSearchResults([]);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    discoverSortBy === opt.value
+                      ? 'bg-violet-600/80 text-white'
+                      : 'bg-white/[0.06] text-white/50 hover:bg-white/[0.10] hover:text-white/80'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           )}
 
