@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui';
@@ -60,9 +60,13 @@ export function Navbar() {
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] transition-colors"
                 >
                   {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                    <img src={user.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
                   ) : (
-                    <User size={14} className="text-white/40" />
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-600 to-violet-400 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-white leading-none">
+                        {(user.username || user.displayName || 'R').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   )}
                   <span className="text-xs text-white/60 font-medium">Account</span>
                 </Link>
@@ -117,9 +121,13 @@ export function Navbar() {
                     className="flex items-center gap-2 px-4 py-3 text-sm text-white/60 hover:text-white/80"
                   >
                     {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                      <img src={user.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
                     ) : (
-                      <User size={15} className="text-white/40" />
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-600 to-violet-400 flex items-center justify-center">
+                        <span className="text-[9px] font-bold text-white leading-none">
+                          {(user.username || user.displayName || 'R').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
                     )}
                     Account
                   </Link>

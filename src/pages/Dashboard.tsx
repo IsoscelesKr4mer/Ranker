@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2, UserCircle, Check, AlertCircle } from 'lucide-react';
+import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2, UserCircle, Check, AlertCircle, Camera } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { useAuthStore } from '@/store/authStore';
@@ -14,6 +14,7 @@ import {
   deleteList,
   updateProfile,
   isUsernameTaken,
+  uploadAvatar,
 } from '@/lib/database';
 import type { RankList, RankingSession } from '@/types';
 
@@ -30,6 +31,10 @@ export default function Dashboard() {
   const [usernameError, setUsernameError] = useState('');
   const [usernameSaving, setUsernameSaving] = useState(false);
   const [usernameSuccess, setUsernameSuccess] = useState(false);
+
+  // Avatar upload state
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -134,6 +139,22 @@ export default function Dashboard() {
     setUsernameSaving(false);
   }, [usernameInput, user, setUser, setNeedsUsername]);
 
+  const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setAvatarUploading(true);
+    const result = await uploadAvatar(file);
+    if ('url' in result) {
+      setUser({ ...user, avatarUrl: result.url });
+    } else {
+      alert(result.error);
+    }
+    setAvatarUploading(false);
+    // Reset input so same file can be re-selected
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  }, [user, setUser]);
+
   const displayName = user?.username || user?.displayName || 'Ranker';
 
   const containerVariants = {
@@ -214,17 +235,49 @@ export default function Dashboard() {
       <div className="space-y-12 py-8">
         {/* Welcome Header */}
         <motion.div
-          className="space-y-3"
+          className="flex items-center gap-5"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h1 className="text-4xl sm:text-5xl font-bold text-white">
-            Welcome back, {displayName}
-          </h1>
-          <p className="text-white/60 text-lg">
-            Track your rankings, discover new lists, and connect with the community
-          </p>
+          {/* Avatar with upload */}
+          <button
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-violet-600 to-violet-400 flex items-center justify-center flex-shrink-0 overflow-hidden group cursor-pointer"
+          >
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl sm:text-3xl font-bold text-white">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+              <Camera className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            {avatarUploading && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              </div>
+            )}
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
+
+          <div className="space-y-2">
+            <h1 className="text-3xl sm:text-5xl font-bold text-white">
+              Welcome back, {displayName}
+            </h1>
+            <p className="text-white/60 text-base sm:text-lg">
+              Track your rankings, discover new lists, and connect with the community
+            </p>
+          </div>
         </motion.div>
 
         {/* Username Setup Banner */}

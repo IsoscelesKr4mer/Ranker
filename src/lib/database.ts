@@ -562,11 +562,49 @@ export async function uploadListImage(file: File): Promise<{ url: string } | { e
 }
 
 
+export async function uploadAvatar(file: File): Promise<{ url: string } | { error: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Storage not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  // Validate file
+  if (!file.type.startsWith('image/')) return { error: 'File must be an image' };
+  if (file.size > 2 * 1024 * 1024) return { error: 'Image must be under 2MB' };
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${user.id}/avatar.${ext}`;
+
+  // Upload (upsert to replace existing)
+  const { error } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { cacheControl: '3600', upsert: true });
+
+  if (error) return { error: error.message };
+
+  const { data: urlData } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(path);
+
+  // Add cache-bust to URL so browsers pick up the new image
+  const url = `${urlData.publicUrl}?t=${Date.now()}`;
+
+  // Also update the profile row
+  await supabase
+    .from('profiles')
+    .update({ avatar_url: url, updated_at: new Date().toISOString() })
+    .eq('id', user.id);
+
+  return { url };
+}
+
+
 // ─── Profiles ─────────────────────────────────────────────────────
 
 export async function updateProfile(params: {
   username?: string;
   displayName?: string;
+  avatarUrl?: string;
 }): Promise<{ error?: string }> {
   if (!isSupabaseConfigured()) return { error: 'Database not configured' };
 
@@ -576,6 +614,7 @@ export async function updateProfile(params: {
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (params.username !== undefined) updates.username = params.username;
   if (params.displayName !== undefined) updates.display_name = params.displayName;
+  if (params.avatarUrl !== undefined) updates.avatar_url = params.avatarUrl;
 
   const { error } = await supabase
     .from('profiles')
