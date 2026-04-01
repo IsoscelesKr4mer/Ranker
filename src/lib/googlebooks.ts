@@ -17,19 +17,20 @@ export interface GoogleBookResult {
 export async function searchBooks(
   query: string,
   type: BookSearchType = 'title',
+  offset = 0,
   limit = 20
-): Promise<{ results: GoogleBookResult[] }> {
+): Promise<{ results: GoogleBookResult[]; hasMore: boolean }> {
   const res = await fetch(
-    `/api/googlebooks?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`
+    `/api/googlebooks?q=${encodeURIComponent(query)}&type=${type}&startIndex=${offset}&limit=${limit}`
   );
 
   if (!res.ok) {
     console.error('Google Books search failed:', res.status);
-    return { results: [] };
+    return { results: [], hasMore: false };
   }
 
   const data = await res.json();
-  return { results: data.results || [] };
+  return { results: data.results || [], hasMore: data.hasMore ?? false };
 }
 
 export function googleBookToRankItem(book: GoogleBookResult): RankItem {

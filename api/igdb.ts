@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { action, query } = req.body;
+  const { action, query, offset = 0 } = req.body;
 
   if (!query) {
     return res.status(400).json({ error: 'Missing query parameter' });
@@ -67,6 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         search "${query.replace(/"/g, '\\"')}";
         fields name, cover.image_id, first_release_date, platforms.name, summary, rating, genres.name;
         limit 20;
+        offset ${offset};
       `,
     });
 

@@ -17,17 +17,18 @@ export interface DeezerResult {
 
 export async function searchMusic(
   query: string,
-  type: MusicSearchType = 'track'
-): Promise<{ results: DeezerResult[] }> {
-  const res = await fetch(`/api/deezer?q=${encodeURIComponent(query)}&type=${type}&limit=20`);
+  type: MusicSearchType = 'track',
+  offset = 0
+): Promise<{ results: DeezerResult[]; hasMore: boolean }> {
+  const res = await fetch(`/api/deezer?q=${encodeURIComponent(query)}&type=${type}&limit=20&index=${offset}`);
 
   if (!res.ok) {
     console.error('Deezer search failed:', res.status);
-    return { results: [] };
+    return { results: [], hasMore: false };
   }
 
   const data = await res.json();
-  return { results: data.results || [] };
+  return { results: data.results || [], hasMore: data.hasMore ?? false };
 }
 
 export function deezerToRankItem(result: DeezerResult): RankItem {

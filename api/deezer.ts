@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { q, type = 'track', limit = '20' } = req.query;
+  const { q, type = 'track', limit = '20', index = '0' } = req.query;
 
   if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing q parameter' });
@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const response = await fetch(
-      `https://api.deezer.com/${endpoint}?q=${encodeURIComponent(q)}&limit=${limit}`,
+      `https://api.deezer.com/${endpoint}?q=${encodeURIComponent(q)}&limit=${limit}&index=${index}`,
       {
         headers: {
           'Accept': 'application/json',
@@ -65,8 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
+    const hasMore = !!data.next;
     res.setHeader('Cache-Control', 'public, s-maxage=300');
-    return res.status(200).json({ results });
+    return res.status(200).json({ results, hasMore });
   } catch (err: any) {
     console.error('Deezer proxy error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });

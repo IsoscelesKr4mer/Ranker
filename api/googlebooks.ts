@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { q, type = 'title', limit = '20' } = req.query;
+  const { q, type = 'title', limit = '20', startIndex = '0' } = req.query;
 
   if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing q parameter' });
@@ -13,9 +13,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Google Books API key not configured' });
   }
 
-  const fetchBooks = async (queryStr: string, maxResults: number) => {
+  const start = parseInt(startIndex as string) || 0;
+
+  const fetchBooks = async (queryStr: string, maxResults: number, offset: number) => {
     const response = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
+      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}&startIndex=${offset}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
       { headers: { 'Accept': 'application/json' } }
     );
     if (!response.ok) throw new Error(`Google Books API error: ${response.status}`);
@@ -27,13 +29,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let data: any;
     if (type === 'author') {
-      // Try strict inauthor: first; fall back to plain search if empty
-      data = await fetchBooks(`inauthor:${q}`, maxResults);
-      if (!data.items || data.items.length === 0) {
-        data = await fetchBooks(q as string, maxResults);
+      // Try strict inauthor: first; fall back to plain search if empty (only on first page)
+      data = await fetchBooks(`inauthor:${q}`, maxResults, start);
+      if (start === 0 && (!data.items || data.items.length === 0)) {
+        data = await fetchBooks(q as string, maxResults, 0);
       }
     } else {
-      data = await fetchBooks(`intitle:${q}`, maxResults);
+      data = await fetchBooks(`intitle:${q}`, maxResults, start);
     }
 
     const results = (data.items || []).map((item: any) => {
@@ -70,8 +72,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
+    const totalItems = data.totalItems || 0;
+    const hasMore = start + results.length < totalItems;
     res.setHeader('Cache-Control', 'public, s-maxage=300');
-    return res.status(200).json({ results });
+    return res.status(200).json({ results, hasMore, totalItems });
   } catch (err: any) {
     console.error('Google Books proxy error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });

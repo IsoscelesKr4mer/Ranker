@@ -178,6 +178,8 @@ export default function CreateList() {
   const [isSearching, setIsSearching] = useState(false);
   const [addedSearchIds, setAddedSearchIds] = useState<Set<string | number>>(new Set());
   const searchTimeoutRef = useRef<number | undefined>(undefined);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
 
   // ── Year filter / discover state ──────────────────────────────────────────
   const [yearFilter, setYearFilter] = useState('');
@@ -195,6 +197,8 @@ export default function CreateList() {
       setAddedSearchIds(new Set());
       setDiscoverPage(1);
       setDiscoverTotalPages(1);
+      setSearchOffset(0);
+      setSearchHasMore(false);
       return;
     }
 
@@ -244,29 +248,42 @@ export default function CreateList() {
       return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
     }
 
-    // Normal text search
+    // Normal text search (always page/offset 0 — resets on every new query)
     const performSearch = async () => {
       setIsSearching(true);
+      setSearchOffset(0);
+      setSearchHasMore(false);
       try {
         if (selectedCategory === 'Games') {
-          const { games } = await searchGames(searchQuery);
+          const { games, hasMore } = await searchGames(searchQuery, 0);
           setSearchResults(games || []);
+          setSearchHasMore(hasMore);
+          setSearchOffset(games?.length ?? 0);
         } else if (selectedCategory === 'TV') {
-          const { shows } = await searchTV(searchQuery);
+          const { shows, totalPages } = await searchTV(searchQuery, 1);
           setSearchResults(shows || []);
+          setSearchHasMore(totalPages > 1);
+          setSearchOffset(shows?.length ?? 0);
         } else if (selectedCategory === 'Music') {
-          const { results } = await searchMusic(searchQuery, musicSearchType);
+          const { results, hasMore } = await searchMusic(searchQuery, musicSearchType, 0);
           setSearchResults(results || []);
+          setSearchHasMore(hasMore);
+          setSearchOffset(results?.length ?? 0);
         } else if (selectedCategory === 'Books') {
-          const { results } = await searchBooks(searchQuery, bookSearchType);
+          const { results, hasMore } = await searchBooks(searchQuery, bookSearchType, 0);
           setSearchResults(results || []);
+          setSearchHasMore(hasMore);
+          setSearchOffset(results?.length ?? 0);
         } else {
-          const { movies } = await searchMovies(searchQuery);
+          const { movies, totalPages } = await searchMovies(searchQuery, 1);
           setSearchResults(movies || []);
+          setSearchHasMore(totalPages > 1);
+          setSearchOffset(movies?.length ?? 0);
         }
       } catch (error) {
         console.error('Search failed:', error);
         setSearchResults([]);
+        setSearchHasMore(false);
       } finally {
         setIsSearching(false);
       }
@@ -296,6 +313,46 @@ export default function CreateList() {
       setIsLoadingMore(false);
     }
   }, [discoverPage, discoverTotalPages, yearFilter, discoverSortBy, isLoadingMore]);
+
+  const loadMoreSearch = useCallback(async () => {
+    if (!searchHasMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      if (selectedCategory === 'Games') {
+        const { games, hasMore } = await searchGames(searchQuery, searchOffset);
+        setSearchResults(prev => [...prev, ...(games || [])]);
+        setSearchOffset(prev => prev + (games?.length ?? 0));
+        setSearchHasMore(hasMore);
+      } else if (selectedCategory === 'TV') {
+        const nextPage = Math.floor(searchOffset / 20) + 1;
+        const { shows, totalPages } = await searchTV(searchQuery, nextPage);
+        setSearchResults(prev => [...prev, ...(shows || [])]);
+        setSearchOffset(prev => prev + (shows?.length ?? 0));
+        setSearchHasMore(nextPage < totalPages);
+      } else if (selectedCategory === 'Music') {
+        const { results, hasMore } = await searchMusic(searchQuery, musicSearchType, searchOffset);
+        setSearchResults(prev => [...prev, ...(results || [])]);
+        setSearchOffset(prev => prev + (results?.length ?? 0));
+        setSearchHasMore(hasMore);
+      } else if (selectedCategory === 'Books') {
+        const { results, hasMore } = await searchBooks(searchQuery, bookSearchType, searchOffset);
+        setSearchResults(prev => [...prev, ...(results || [])]);
+        setSearchOffset(prev => prev + (results?.length ?? 0));
+        setSearchHasMore(hasMore);
+      } else {
+        // Movies text search
+        const nextPage = Math.floor(searchOffset / 20) + 1;
+        const { movies, totalPages } = await searchMovies(searchQuery, nextPage);
+        setSearchResults(prev => [...prev, ...(movies || [])]);
+        setSearchOffset(prev => prev + (movies?.length ?? 0));
+        setSearchHasMore(nextPage < totalPages);
+      }
+    } catch (error) {
+      console.error('Load more search failed:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [searchHasMore, isLoadingMore, selectedCategory, searchQuery, searchOffset, musicSearchType, bookSearchType]);
 
   const handleSelectPerson = useCallback(async (person: any) => {
     setSelectedPerson({ id: person.id, name: person.name, profilePath: person.profile_path });
@@ -1169,6 +1226,17 @@ export default function CreateList() {
               className="w-full py-3 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/50 hover:text-white/80 hover:bg-white/[0.08] text-sm font-medium transition-all disabled:opacity-40"
             >
               {isLoadingMore ? 'Loading…' : `Load more ${yearFilter} releases`}
+            </button>
+          )}
+
+          {/* Load more — text search across all categories */}
+          {searchQuery && searchHasMore && searchResults.length > 0 && (
+            <button
+              onClick={loadMoreSearch}
+              disabled={isLoadingMore}
+              className="w-full py-3 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/50 hover:text-white/80 hover:bg-white/[0.08] text-sm font-medium transition-all disabled:opacity-40"
+            >
+              {isLoadingMore ? 'Loading…' : 'Load more results'}
             </button>
           )}
 
