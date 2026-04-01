@@ -64,6 +64,45 @@ export default function Dashboard() {
     }
   }
 
+  // These must be declared before any early returns to satisfy Rules of Hooks.
+  const handleSetUsername = useCallback(async () => {
+    const trimmed = usernameInput.trim().toLowerCase();
+    if (!trimmed) { setUsernameError('Username is required'); return; }
+    if (trimmed.length < 3) { setUsernameError('At least 3 characters'); return; }
+    if (trimmed.length > 24) { setUsernameError('Max 24 characters'); return; }
+    if (!/^[a-z0-9_-]+$/.test(trimmed)) { setUsernameError('Only lowercase letters, numbers, hyphens, underscores'); return; }
+
+    setUsernameSaving(true);
+    setUsernameError('');
+
+    const taken = await isUsernameTaken(trimmed, user?.id);
+    if (taken) { setUsernameError('Username already taken'); setUsernameSaving(false); return; }
+
+    const result = await updateProfile({ username: trimmed });
+    if (result.error) { setUsernameError(result.error); setUsernameSaving(false); return; }
+
+    if (user) setUser({ ...user, username: trimmed });
+    setNeedsUsername(false);
+    setUsernameSuccess(true);
+    setTimeout(() => setUsernameSuccess(false), 3000);
+    setUsernameSaving(false);
+  }, [usernameInput, user, setUser, setNeedsUsername]);
+
+  const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setAvatarUploading(true);
+    const result = await uploadAvatar(file);
+    if ('url' in result) {
+      setUser({ ...user, avatarUrl: result.url });
+    } else {
+      alert(result.error);
+    }
+    setAvatarUploading(false);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  }, [user, setUser]);
+
   // Redirect to auth if not authenticated
   if (status === 'loading') {
     return (
@@ -114,46 +153,6 @@ export default function Dashboard() {
       </PageLayout>
     );
   }
-
-  const handleSetUsername = useCallback(async () => {
-    const trimmed = usernameInput.trim().toLowerCase();
-    if (!trimmed) { setUsernameError('Username is required'); return; }
-    if (trimmed.length < 3) { setUsernameError('At least 3 characters'); return; }
-    if (trimmed.length > 24) { setUsernameError('Max 24 characters'); return; }
-    if (!/^[a-z0-9_-]+$/.test(trimmed)) { setUsernameError('Only lowercase letters, numbers, hyphens, underscores'); return; }
-
-    setUsernameSaving(true);
-    setUsernameError('');
-
-    const taken = await isUsernameTaken(trimmed, user?.id);
-    if (taken) { setUsernameError('Username already taken'); setUsernameSaving(false); return; }
-
-    const result = await updateProfile({ username: trimmed });
-    if (result.error) { setUsernameError(result.error); setUsernameSaving(false); return; }
-
-    // Update local state
-    if (user) setUser({ ...user, username: trimmed });
-    setNeedsUsername(false);
-    setUsernameSuccess(true);
-    setTimeout(() => setUsernameSuccess(false), 3000);
-    setUsernameSaving(false);
-  }, [usernameInput, user, setUser, setNeedsUsername]);
-
-  const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
-    setAvatarUploading(true);
-    const result = await uploadAvatar(file);
-    if ('url' in result) {
-      setUser({ ...user, avatarUrl: result.url });
-    } else {
-      alert(result.error);
-    }
-    setAvatarUploading(false);
-    // Reset input so same file can be re-selected
-    if (avatarInputRef.current) avatarInputRef.current.value = '';
-  }, [user, setUser]);
 
   const displayName = user?.username || user?.displayName || 'Ranker';
 
