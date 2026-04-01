@@ -49,7 +49,7 @@ export async function discoverMovies(options: {
   if (options.genreId) params.set('with_genres', String(options.genreId));
   // Filter to recognisable releases: TMDB's with_release_type is unreliable,
   // so use a vote count floor as a proxy for "real" theatrical releases.
-  if (options.theatricalOnly) params.set('vote_count.gte', '50');
+  if (options.theatricalOnly) params.set('vote_count.gte', '200');
 
   const res = await fetch(`${BASE_URL}/discover/movie?${params}`);
   const data: TMDbSearchResult = await res.json();
