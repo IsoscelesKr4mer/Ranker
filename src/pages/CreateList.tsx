@@ -608,6 +608,11 @@ export default function CreateList() {
             {isSaving ? <Spinner /> : 'Save List Only'}
           </button>
         )}
+        {!listTitle.trim() && items.length > 0 && (
+          <p className="text-center text-[11px] text-amber-400/80 pt-0.5">
+            Give your list a name to save it
+          </p>
+        )}
       </div>
     </div>
   );
@@ -618,14 +623,26 @@ export default function CreateList() {
       <div className="sticky top-14 z-30 -mx-8 sm:-mx-12 px-6 sm:px-10 py-3 mb-6 bg-[#060610]/92 backdrop-blur-xl border-b border-white/[0.07]">
         <div className="max-w-6xl mx-auto space-y-3">
           {/* Title input */}
-          <input
-            type="text"
-            placeholder="Name your list…"
-            value={listTitle}
-            onChange={e => setListTitle(e.target.value)}
-            style={{ fontSize: '16px' }}
-            className="w-full bg-transparent text-white/90 placeholder:text-white/20 font-semibold tracking-tight focus:outline-none border-0 text-lg"
-          />
+          <div className="relative group">
+            <input
+              type="text"
+              placeholder="Name your list…"
+              value={listTitle}
+              onChange={e => setListTitle(e.target.value)}
+              style={{ fontSize: '16px' }}
+              className="w-full bg-transparent text-white/90 placeholder:text-white/40 font-semibold tracking-tight focus:outline-none border-0 text-lg pb-1.5"
+            />
+            <div className={`absolute bottom-0 left-0 right-0 h-px transition-all duration-200 ${
+              listTitle.trim()
+                ? 'bg-violet-500/60'
+                : 'bg-white/20 group-focus-within:bg-violet-500/60'
+            }`} />
+            {!listTitle.trim() && (
+              <span className="absolute right-0 bottom-2 text-[10px] font-medium text-amber-400/70 pointer-events-none">
+                required
+              </span>
+            )}
+          </div>
 
           {/* Category pills */}
           <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
