@@ -712,7 +712,7 @@ export default function CreateList() {
               )}
               <input
                 ref={searchInputRef}
-                type="search"
+                type="text"
                 inputMode="search"
                 placeholder={searchPlaceholder}
                 value={searchQuery}
@@ -1115,28 +1115,4 @@ export default function CreateList() {
             <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-bold ${
               items.length >= 3 ? 'bg-violet-600/30 text-violet-300' : 'bg-white/[0.08] text-white/40'
             }`}>{items.length}</span>
-          </span>
-          <motion.div animate={{ rotate: isTrayOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown className="w-4 h-4" />
-          </motion.div>
-        </button>
-        <AnimatePresence>
-          {isTrayOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden border-t border-white/[0.07]"
-            >
-              <div className="p-5">
-                <ItemsPanel isMobile />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-    </PageLayout>
-  );
-}
+          </s
