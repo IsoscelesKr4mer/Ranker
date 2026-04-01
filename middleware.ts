@@ -109,7 +109,6 @@ export default async function middleware(request: Request): Promise<Response | u
   <meta name="twitter:title"       content="${safeTitle}">
   <meta name="twitter:description" content="${safeDesc}">
   <meta name="twitter:image"       content="${safeImg}">
-  <meta name="twitter:site"        content="@rankerapp">
 </head>
 <body>
   <h1>${safeTitle}</h1>
