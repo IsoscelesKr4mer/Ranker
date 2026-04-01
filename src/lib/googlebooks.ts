@@ -1,5 +1,7 @@
 import type { RankItem } from '@/types';
 
+export type BookSearchType = 'title' | 'author';
+
 export interface GoogleBookResult {
   id: string;
   title: string;
@@ -14,10 +16,11 @@ export interface GoogleBookResult {
 
 export async function searchBooks(
   query: string,
+  type: BookSearchType = 'title',
   limit = 20
 ): Promise<{ results: GoogleBookResult[] }> {
   const res = await fetch(
-    `/api/googlebooks?q=${encodeURIComponent(query)}&limit=${limit}`
+    `/api/googlebooks?q=${encodeURIComponent(query)}&type=${type}&limit=${limit}`
   );
 
   if (!res.ok) {

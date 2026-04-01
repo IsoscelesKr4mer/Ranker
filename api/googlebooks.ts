@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { q, limit = '20' } = req.query;
+  const { q, type = 'title', limit = '20' } = req.query;
 
   if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing q parameter' });
@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const maxResults = Math.min(parseInt(limit as string) || 20, 40);
-    const titleQuery = `intitle:${q}`;
+    const titleQuery = type === 'author' ? `inauthor:${q}` : `intitle:${q}`;
     const response = await fetch(
       `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(titleQuery)}&maxResults=${maxResults}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
       { headers: { 'Accept': 'application/json' } }

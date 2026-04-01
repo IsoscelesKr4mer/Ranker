@@ -10,7 +10,7 @@ import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, discoverMovies, searchPerson, getPersonMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
-import { searchBooks, googleBookToRankItem } from '@/lib/googlebooks';
+import { searchBooks, googleBookToRankItem, type BookSearchType } from '@/lib/googlebooks';
 import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
 import { saveList, updateList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
@@ -44,6 +44,7 @@ export default function CreateList() {
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Movies');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
+  const [bookSearchType, setBookSearchType] = useState<BookSearchType>('title');
   const [movieSearchType, setMovieSearchType] = useState<'title' | 'actor' | 'director' | 'year'>('title');
   const [personResults, setPersonResults] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string; profilePath: string | null } | null>(null);
@@ -257,7 +258,7 @@ export default function CreateList() {
           const { results } = await searchMusic(searchQuery, musicSearchType);
           setSearchResults(results || []);
         } else if (selectedCategory === 'Books') {
-          const { results } = await searchBooks(searchQuery);
+          const { results } = await searchBooks(searchQuery, bookSearchType);
           setSearchResults(results || []);
         } else {
           const { movies } = await searchMovies(searchQuery);
@@ -273,7 +274,7 @@ export default function CreateList() {
 
     searchTimeoutRef.current = setTimeout(performSearch, 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, [searchQuery, yearFilter, discoverSortBy, selectedCategory, musicSearchType, movieSearchType, selectedPerson]);
+  }, [searchQuery, yearFilter, discoverSortBy, selectedCategory, musicSearchType, bookSearchType, movieSearchType, selectedPerson]);
 
   const loadMoreDiscover = useCallback(async () => {
     if (discoverPage >= discoverTotalPages || isLoadingMore) return;
@@ -534,7 +535,7 @@ export default function CreateList() {
     : selectedCategory === 'Games' ? 'Search games...'
     : selectedCategory === 'Music'
       ? musicSearchType === 'album' ? 'Search albums...' : musicSearchType === 'artist' ? 'Search artists...' : 'Search songs...'
-    : selectedCategory === 'Books' ? 'Search books...'
+    : selectedCategory === 'Books' ? (bookSearchType === 'author' ? 'Search by author...' : 'Search books by title...')
     : selectedCategory === 'Movies' && movieSearchType === 'actor' ? 'Search actors...'
     : selectedCategory === 'Movies' && movieSearchType === 'director' ? 'Search directors...'
     : 'Search movies...';
@@ -823,6 +824,25 @@ export default function CreateList() {
                   }`}
                 >
                   {type === 'track' ? 'Songs' : type === 'album' ? 'Albums' : 'Artists'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Books sub-type picker */}
+          {selectedCategory === 'Books' && (
+            <div className="flex gap-1.5">
+              {(['title', 'author'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => { setBookSearchType(type); setSearchQuery(''); setSearchResults([]); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    bookSearchType === type
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-white/[0.05] text-white/45 hover:text-white/70 hover:bg-white/[0.08] border border-white/[0.07]'
+                  }`}
+                >
+                  {type === 'title' ? 'Title' : 'Author'}
                 </button>
               ))}
             </div>
