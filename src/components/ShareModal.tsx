@@ -292,9 +292,6 @@ export function ShareModal({ isOpen, onClose, listTitle, items, shareLink, isSav
   }, [shareLink, listTitle]);
 
   const linkPending = isSavingLink || !shareLink;
-  const linkDescription = linkPending
-    ? 'Generating link…'
-    : shareLink;
 
   return (
     <>
