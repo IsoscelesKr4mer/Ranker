@@ -146,6 +146,8 @@ export default function Ranking() {
   const [streak, setStreak] = useState(0);
   const [shownMilestone, setShownMilestone] = useState<number | null>(null);
   const [showMilestone, setShowMilestone] = useState(false);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
+  const [cardContainerMinHeight, setCardContainerMinHeight] = useState<number | undefined>(undefined);
 
   // Review mode state
   const [reviewMode, setReviewMode] = useState(true);
@@ -528,6 +530,14 @@ export default function Ranking() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [reviewMode, comparison, handleCardChoice, handleUndo]);
+
+  // Lock the card container height before each transition to prevent layout shifts
+  useEffect(() => {
+    if (cardContainerRef.current) {
+      const h = cardContainerRef.current.offsetHeight;
+      if (h > 0) setCardContainerMinHeight(h);
+    }
+  }, [comparison?.left.id, comparison?.right.id]);
 
   // Milestone celebrations at 25%, 50%, 75%
   useEffect(() => {
@@ -938,206 +948,168 @@ export default function Ranking() {
           </motion.p>
         </AnimatePresence>
 
-        {/* Comparison Cards */}
-        <div className="w-full max-w-xl sm:max-w-2xl">
-          <div className="flex gap-3 sm:gap-4 items-stretch">
-
-            {/* Left Card */}
-            <motion.button
-              onClick={() => handleCardChoice('left')}
-              disabled={isAnimating}
-              className={`flex-1 group relative rounded-2xl overflow-visible transition-shadow duration-100 touch-target ${
-                isAnimating ? 'cursor-default' : 'cursor-pointer'
-              } ${
-                selectedCard === 'left'
-                  ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_40px_rgba(139,92,246,0.22)]'
-                  : ''
-              }`}
-              whileHover={!isAnimating ? { scale: 1.03, y: -6 } : {}}
-              whileTap={!isAnimating ? { scale: 0.96 } : {}}
-              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+        {/* Comparison Cards
+            — Wrapped in a single AnimatePresence so both cards exit/enter
+              as one unit. The outer container stays in the DOM during the
+              exit animation, keeping its height and preventing any layout
+              shift below. minHeight from a ref locks the height during the
+              brief gap between old container leaving and new one entering. */}
+        <div
+          ref={cardContainerRef}
+          className="w-full max-w-xl sm:max-w-2xl"
+          style={{ minHeight: cardContainerMinHeight }}
+        >
+          <AnimatePresence mode="wait" custom={lastChosenSideRef.current}>
+            <motion.div
+              key={`${comparison.left.id}-${comparison.right.id}`}
+              custom={lastChosenSideRef.current}
+              initial="enter"
+              animate="show"
+              exit="exit"
+              variants={{
+                enter: {},
+                show: {},
+                exit: { transition: { when: 'afterChildren' } },
+              }}
+              className="flex gap-3 sm:gap-4 items-stretch"
             >
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={comparison.left.id}
-                  initial={{ opacity: 0, y: 22, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={
-                    lastChosenSideRef.current === 'left'
-                      ? { opacity: 0, scale: 1.07, y: -18, transition: { duration: 0.16, ease: 'easeIn' } }
-                      : { opacity: 0, scale: 0.8, x: -70, rotate: -9, transition: { duration: 0.2, ease: 'easeIn' } }
-                  }
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-full h-full"
-                >
-                  <div
-                    className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
-                      selectedCard === 'left'
-                        ? 'border-violet-400/60'
-                        : 'border-white/[0.09] group-hover:border-white/[0.22]'
-                    }`}
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
-                  >
-                    {/* Image */}
-                    <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
-                      {comparison.left.imageUrl ? (
-                        <>
-                          <img
-                            src={comparison.left.imageUrl}
-                            alt={comparison.left.title}
-                            className="w-full h-full object-cover"
-                            loading="eager"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
-                          <AnimatePresence>
-                            {selectedCard === 'left' && (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.08 }}
-                                className="absolute inset-0 bg-violet-500/20"
-                              />
-                            )}
-                          </AnimatePresence>
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
-                          <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.left.title}</span>
-                        </div>
-                      )}
-                      {/* Skip button — hover overlay */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemove(comparison.left.id); }}
-                        disabled={isAnimating}
-                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150"
-                        title="Skip this item"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                    {/* Text */}
-                    <div className="px-3 py-2.5 sm:px-4">
-                      <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">
-                        {comparison.left.title}
-                      </h3>
-                      {comparison.left.subtitle && (
-                        <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.left.subtitle}</p>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </motion.button>
 
-            {/* VS Divider */}
-            <div className="flex flex-col justify-center items-center flex-shrink-0 w-8 sm:w-10">
-              <motion.div
-                animate={
-                  selectedCard
-                    ? { scale: 0.75, opacity: 0.2 }
-                    : { scale: [1, 1.14, 1], opacity: [0.45, 0.72, 0.45] }
-                }
-                transition={
-                  selectedCard
-                    ? { duration: 0.1 }
-                    : { duration: 2.8, repeat: Infinity, ease: 'easeInOut' }
-                }
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-violet-500/25 flex items-center justify-center"
-                style={{ background: 'rgba(139,92,246,0.08)', boxShadow: '0 0 14px rgba(139,92,246,0.14)' }}
+              {/* Left Card */}
+              <motion.button
+                onClick={() => handleCardChoice('left')}
+                disabled={isAnimating}
+                custom={lastChosenSideRef.current}
+                initial="enter"
+                animate="show"
+                exit="exit"
+                variants={{
+                  enter: { opacity: 0, scale: 0.97 },
+                  show: { opacity: 1, scale: 1, transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } },
+                  exit: (chosen: 'left' | 'right' | null) =>
+                    chosen === 'left'
+                      ? { opacity: 0, scale: 1.06, transition: { duration: 0.12, ease: 'easeIn' } }
+                      : { opacity: 0, scale: 0.9, transition: { duration: 0.12, ease: 'easeIn' } },
+                }}
+                className={`flex-1 group relative rounded-2xl overflow-hidden touch-target ${
+                  isAnimating ? 'cursor-default' : 'cursor-pointer'
+                } ${
+                  selectedCard === 'left'
+                    ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_30px_rgba(139,92,246,0.2)]'
+                    : ''
+                }`}
+                whileHover={!isAnimating ? { scale: 1.02, y: -3 } : {}}
+                whileTap={!isAnimating ? { scale: 0.97 } : {}}
               >
-                <span className="text-[9px] font-black tracking-[0.12em] text-violet-300/55 select-none uppercase">vs</span>
-              </motion.div>
-            </div>
-
-            {/* Right Card */}
-            <motion.button
-              onClick={() => handleCardChoice('right')}
-              disabled={isAnimating}
-              className={`flex-1 group relative rounded-2xl overflow-visible transition-shadow duration-100 touch-target ${
-                isAnimating ? 'cursor-default' : 'cursor-pointer'
-              } ${
-                selectedCard === 'right'
-                  ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_40px_rgba(139,92,246,0.22)]'
-                  : ''
-              }`}
-              whileHover={!isAnimating ? { scale: 1.03, y: -6 } : {}}
-              whileTap={!isAnimating ? { scale: 0.96 } : {}}
-              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-            >
-              <AnimatePresence mode="popLayout">
-                <motion.div
-                  key={comparison.right.id}
-                  initial={{ opacity: 0, y: 22, scale: 0.97 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={
-                    lastChosenSideRef.current === 'right'
-                      ? { opacity: 0, scale: 1.07, y: -18, transition: { duration: 0.16, ease: 'easeIn' } }
-                      : { opacity: 0, scale: 0.8, x: 70, rotate: 9, transition: { duration: 0.2, ease: 'easeIn' } }
-                  }
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-full h-full"
+                <div
+                  className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
+                    selectedCard === 'left'
+                      ? 'border-violet-400/60'
+                      : 'border-white/[0.09] group-hover:border-white/[0.22]'
+                  }`}
+                  style={{ background: 'rgba(255,255,255,0.04)' }}
                 >
-                  <div
-                    className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
-                      selectedCard === 'right'
-                        ? 'border-violet-400/60'
-                        : 'border-white/[0.09] group-hover:border-white/[0.22]'
-                    }`}
-                    style={{ background: 'rgba(255,255,255,0.04)' }}
-                  >
-                    {/* Image */}
-                    <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
-                      {comparison.right.imageUrl ? (
-                        <>
-                          <img
-                            src={comparison.right.imageUrl}
-                            alt={comparison.right.title}
-                            className="w-full h-full object-cover"
-                            loading="eager"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
-                          <AnimatePresence>
-                            {selectedCard === 'right' && (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.08 }}
-                                className="absolute inset-0 bg-violet-500/20"
-                              />
-                            )}
-                          </AnimatePresence>
-                        </>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
-                          <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.right.title}</span>
-                        </div>
-                      )}
-                      {/* Skip button — hover overlay */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemove(comparison.right.id); }}
-                        disabled={isAnimating}
-                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150"
-                        title="Skip this item"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                    {/* Text */}
-                    <div className="px-3 py-2.5 sm:px-4">
-                      <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">
-                        {comparison.right.title}
-                      </h3>
-                      {comparison.right.subtitle && (
-                        <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.right.subtitle}</p>
-                      )}
-                    </div>
+                  <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
+                    {comparison.left.imageUrl ? (
+                      <>
+                        <img src={comparison.left.imageUrl} alt={comparison.left.title} className="w-full h-full object-cover" loading="eager" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
+                        <AnimatePresence>
+                          {selectedCard === 'left' && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.08 }} className="absolute inset-0 bg-violet-500/20" />
+                          )}
+                        </AnimatePresence>
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
+                        <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.left.title}</span>
+                      </div>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); handleRemove(comparison.left.id); }} disabled={isAnimating} className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150" title="Skip this item">
+                      <X size={11} />
+                    </button>
                   </div>
+                  <div className="px-3 py-2.5 sm:px-4">
+                    <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">{comparison.left.title}</h3>
+                    {comparison.left.subtitle && <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.left.subtitle}</p>}
+                  </div>
+                </div>
+              </motion.button>
+
+              {/* VS Divider */}
+              <div className="flex flex-col justify-center items-center flex-shrink-0 w-8 sm:w-10">
+                <motion.div
+                  animate={selectedCard ? { scale: 0.75, opacity: 0.2 } : { scale: [1, 1.14, 1], opacity: [0.45, 0.72, 0.45] }}
+                  transition={selectedCard ? { duration: 0.1 } : { duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-violet-500/25 flex items-center justify-center"
+                  style={{ background: 'rgba(139,92,246,0.08)', boxShadow: '0 0 14px rgba(139,92,246,0.14)' }}
+                >
+                  <span className="text-[9px] font-black tracking-[0.12em] text-violet-300/55 select-none uppercase">vs</span>
                 </motion.div>
-              </AnimatePresence>
-            </motion.button>
-          </div>
+              </div>
+
+              {/* Right Card */}
+              <motion.button
+                onClick={() => handleCardChoice('right')}
+                disabled={isAnimating}
+                custom={lastChosenSideRef.current}
+                initial="enter"
+                animate="show"
+                exit="exit"
+                variants={{
+                  enter: { opacity: 0, scale: 0.97 },
+                  show: { opacity: 1, scale: 1, transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] } },
+                  exit: (chosen: 'left' | 'right' | null) =>
+                    chosen === 'right'
+                      ? { opacity: 0, scale: 1.06, transition: { duration: 0.12, ease: 'easeIn' } }
+                      : { opacity: 0, scale: 0.9, transition: { duration: 0.12, ease: 'easeIn' } },
+                }}
+                className={`flex-1 group relative rounded-2xl overflow-hidden touch-target ${
+                  isAnimating ? 'cursor-default' : 'cursor-pointer'
+                } ${
+                  selectedCard === 'right'
+                    ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_30px_rgba(139,92,246,0.2)]'
+                    : ''
+                }`}
+                whileHover={!isAnimating ? { scale: 1.02, y: -3 } : {}}
+                whileTap={!isAnimating ? { scale: 0.97 } : {}}
+              >
+                <div
+                  className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
+                    selectedCard === 'right'
+                      ? 'border-violet-400/60'
+                      : 'border-white/[0.09] group-hover:border-white/[0.22]'
+                  }`}
+                  style={{ background: 'rgba(255,255,255,0.04)' }}
+                >
+                  <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
+                    {comparison.right.imageUrl ? (
+                      <>
+                        <img src={comparison.right.imageUrl} alt={comparison.right.title} className="w-full h-full object-cover" loading="eager" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
+                        <AnimatePresence>
+                          {selectedCard === 'right' && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.08 }} className="absolute inset-0 bg-violet-500/20" />
+                          )}
+                        </AnimatePresence>
+                      </>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
+                        <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.right.title}</span>
+                      </div>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); handleRemove(comparison.right.id); }} disabled={isAnimating} className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150" title="Skip this item">
+                      <X size={11} />
+                    </button>
+                  </div>
+                  <div className="px-3 py-2.5 sm:px-4">
+                    <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">{comparison.right.title}</h3>
+                    {comparison.right.subtitle && <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.right.subtitle}</p>}
+                  </div>
+                </div>
+              </motion.button>
+
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Bottom controls */}
