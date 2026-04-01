@@ -946,7 +946,7 @@ export default function Ranking() {
             <motion.button
               onClick={() => handleCardChoice('left')}
               disabled={isAnimating}
-              className={`flex-1 group relative rounded-2xl overflow-hidden transition-shadow duration-100 touch-target ${
+              className={`flex-1 group relative rounded-2xl overflow-visible transition-shadow duration-100 touch-target ${
                 isAnimating ? 'cursor-default' : 'cursor-pointer'
               } ${
                 selectedCard === 'left'
@@ -957,7 +957,7 @@ export default function Ranking() {
               whileTap={!isAnimating ? { scale: 0.96 } : {}}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             >
-              <AnimatePresence>
+              <AnimatePresence mode="popLayout">
                 <motion.div
                   key={comparison.left.id}
                   initial={{ opacity: 0, y: 22, scale: 0.97 }}
@@ -1054,7 +1054,7 @@ export default function Ranking() {
             <motion.button
               onClick={() => handleCardChoice('right')}
               disabled={isAnimating}
-              className={`flex-1 group relative rounded-2xl overflow-hidden transition-shadow duration-100 touch-target ${
+              className={`flex-1 group relative rounded-2xl overflow-visible transition-shadow duration-100 touch-target ${
                 isAnimating ? 'cursor-default' : 'cursor-pointer'
               } ${
                 selectedCard === 'right'
@@ -1065,7 +1065,7 @@ export default function Ranking() {
               whileTap={!isAnimating ? { scale: 0.96 } : {}}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             >
-              <AnimatePresence>
+              <AnimatePresence mode="popLayout">
                 <motion.div
                   key={comparison.right.id}
                   initial={{ opacity: 0, y: 22, scale: 0.97 }}
