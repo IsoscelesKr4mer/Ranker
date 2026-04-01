@@ -79,7 +79,7 @@ export default async function middleware(request: Request): Promise<Response | u
     }
   }
 
-  const ogImage  = `${url.origin}/api/og/${shareId}`;
+  const ogImage  = `${url.origin}/api/og?shareId=${shareId}`;
   const pageUrl  = url.href;
   const safeTitle = escape(title);
   const safeDesc  = escape(description);
