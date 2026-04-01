@@ -43,7 +43,7 @@ export default function CreateList() {
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Movies');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
-  const [movieSearchType, setMovieSearchType] = useState<'title' | 'actor' | 'director'>('title');
+  const [movieSearchType, setMovieSearchType] = useState<'title' | 'actor' | 'director' | 'year'>('title');
   const [personResults, setPersonResults] = useState<any[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string; profilePath: string | null } | null>(null);
   const [isCommunity, setIsCommunity] = useState(false);
@@ -736,10 +736,11 @@ export default function CreateList() {
           {/* Movies sub-type picker */}
           {selectedCategory === 'Movies' && (
             <div className="flex gap-1.5">
-              {(['title', 'actor', 'director'] as const).map(type => (
+              {(['title', 'actor', 'director', 'year'] as const).map(type => (
                 <button
                   key={type}
                   onClick={() => {
+                    if (type !== 'year') setYearFilter('');
                     setMovieSearchType(type);
                     setSearchQuery('');
                     setSearchResults([]);
@@ -752,7 +753,7 @@ export default function CreateList() {
                       : 'bg-white/[0.05] text-white/45 hover:text-white/70 hover:bg-white/[0.08] border border-white/[0.07]'
                   }`}
                 >
-                  {type === 'title' ? 'Title' : type === 'actor' ? 'Actor' : 'Director'}
+                  {type === 'title' ? 'Title' : type === 'actor' ? 'Actor' : type === 'director' ? 'Director' : 'Year'}
                 </button>
               ))}
             </div>
@@ -761,7 +762,41 @@ export default function CreateList() {
           {/* Search bar */}
           {isSearchableCategory ? (
             <div className="space-y-2">
-            {/* Selected person chip */}
+            {/* Year input — Movies year mode */}
+            {selectedCategory === 'Movies' && movieSearchType === 'year' && (
+              <div className="space-y-1.5">
+                <div className="relative flex items-center">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
+                  <input
+                    type="number"
+                    min="1888"
+                    max={new Date().getFullYear() + 2}
+                    placeholder="Enter a year, e.g. 2025"
+                    value={yearFilter}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      setYearFilter(val);
+                      if (val.length !== 4) { setDiscoverPage(1); setDiscoverTotalPages(1); }
+                    }}
+                    style={{ fontSize: '16px' }}
+                    className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.10] text-white/90 placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/12 hover:border-white/[0.16] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  {yearFilter && (
+                    <button
+                      onClick={() => { setYearFilter(''); setDiscoverPage(1); setDiscoverTotalPages(1); setSearchResults([]); }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {yearFilter.length === 4 && (
+                  <p className="text-xs text-white/30 pl-1">Showing theatrical releases only</p>
+                )}
+              </div>
+            )}
+            {/* Selected person chip + text search — hidden in year mode */}
+            {!(selectedCategory === 'Movies' && movieSearchType === 'year') && (<>
             {selectedPerson && (
               <div className="flex items-center gap-2">
                 {selectedPerson.profilePath && (
@@ -808,6 +843,7 @@ export default function CreateList() {
               />
             </div>
             )}
+            </>)}
             </div>
           ) : (
             /* Manual add as primary for Custom/Food */
@@ -834,42 +870,8 @@ export default function CreateList() {
             </div>
           )}
 
-          {/* Year filter — Movies only */}
-          {selectedCategory === 'Movies' && (
-            <div className="space-y-1.5">
-            <div className="relative flex items-center">
-              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
-              <input
-                type="number"
-                min="1888"
-                max={new Date().getFullYear() + 2}
-                placeholder="Browse by year, e.g. 2025"
-                value={yearFilter}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                  setYearFilter(val);
-                  if (val.length !== 4) { setDiscoverPage(1); setDiscoverTotalPages(1); }
-                }}
-                style={{ fontSize: '16px' }}
-                className="w-full pl-12 pr-10 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.10] text-white/90 placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/12 hover:border-white/[0.16] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              {yearFilter && (
-                <button
-                  onClick={() => { setYearFilter(''); setDiscoverPage(1); setDiscoverTotalPages(1); if (!searchQuery) setSearchResults([]); }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            {yearFilter.length === 4 && !searchQuery && (
-              <p className="text-xs text-white/30 pl-1">Showing theatrical releases only</p>
-            )}
-            </div>
-          )}
-
-          {/* Sort controls — shown whenever year filter is active for Movies */}
-          {selectedCategory === 'Movies' && yearFilter.length === 4 && (
+          {/* Sort controls — shown in year mode once a valid year is entered */}
+          {selectedCategory === 'Movies' && movieSearchType === 'year' && yearFilter.length === 4 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-white/35 font-medium shrink-0">Sort by</span>
               {(
@@ -1056,7 +1058,7 @@ export default function CreateList() {
           {isSearchableCategory && !searchQuery && !selectedPerson && !(yearFilter.length === 4 && selectedCategory === 'Movies') && (
             <div className="py-10 text-center space-y-2">
               <Search className="w-8 h-8 text-white/10 mx-auto" />
-              <p className="text-sm text-white/25">Search above to find {selectedCategory === 'TV' ? 'TV shows' : selectedCategory.toLowerCase()} to add{selectedCategory === 'Movies' ? ', or enter a year below to browse by release date' : ''}</p>
+              <p className="text-sm text-white/25">Search above to find {selectedCategory === 'TV' ? 'TV shows' : selectedCategory.toLowerCase()} to add{selectedCategory === 'Movies' ? ', or switch to Year to browse by release date' : ''}</p>
             </div>
           )}
 
