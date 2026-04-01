@@ -387,6 +387,52 @@ export default function Dashboard() {
           })}
         </motion.div>
 
+        {/* In Progress Section — shown prominently when there are paused rankings */}
+        {!loading && inProgress.length > 0 && (
+          <motion.div
+            className="space-y-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+          >
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold text-white">Continue Ranking</h2>
+              <p className="text-white/60">Pick up where you left off</p>
+            </div>
+
+            <div className="space-y-3">
+              {inProgress.map((session) => (
+                <Link key={session.id} to={`/rank/${session.id}/resume`}>
+                  <Card padding="lg" hover className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1 flex-1">
+                        <h3 className="font-semibold text-white">{session.listTitle}</h3>
+                        <p className="text-xs text-white/50">
+                          {session.comparisonsMade} of {session.estimatedTotal} comparisons • {new Date(session.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-violet-600 to-violet-400 rounded-full"
+                            style={{
+                              width: `${Math.min(Math.round((session.comparisonsMade / Math.max(session.estimatedTotal, 1)) * 100), 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs text-white/40 tabular-nums w-8">
+                          {Math.min(Math.round((session.comparisonsMade / Math.max(session.estimatedTotal, 1)) * 100), 100)}%
+                        </span>
+                        <div className="text-violet-400 text-sm font-medium">Resume →</div>
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* Quick Start Section */}
         <motion.div
           className="space-y-6"
@@ -591,50 +637,6 @@ export default function Dashboard() {
           )}
         </motion.div>
 
-        {/* In Progress Section */}
-        {!loading && inProgress.length > 0 && (
-          <motion.div
-            className="space-y-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.5 }}
-          >
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">In Progress</h2>
-              <p className="text-white/60">
-                Resume your ranking sessions
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {inProgress.map((session) => (
-                <Link key={session.id} to={`/rank/${session.id}/resume`}>
-                  <Card padding="lg" hover className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1 flex-1">
-                        <h3 className="font-semibold text-white">{session.listTitle}</h3>
-                        <p className="text-xs text-white/50">
-                          {session.comparisonsMade} of {session.estimatedTotal} comparisons • Started {new Date(session.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-violet-600 to-violet-500"
-                            style={{
-                              width: `${Math.round((session.comparisonsMade / session.estimatedTotal) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <div className="text-violet-400 text-sm font-medium">Resume →</div>
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </motion.div>
-        )}
       </div>
     </PageLayout>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button, ProgressBar } from '@/components/ui';
@@ -140,6 +140,7 @@ export default function Ranking() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [guestSavedSession, setGuestSavedSession] = useState<GuestSession | null>(null);
   const [isSavingAndExiting, setIsSavingAndExiting] = useState(false);
+  const sessionCreated = useRef(false);
 
   // Review mode state
   const [reviewMode, setReviewMode] = useState(true);
@@ -337,6 +338,37 @@ export default function Ranking() {
     autoSave();
   }, [user, currentSessionId, sortState, progress, rankingState, presetId]);
 
+  // Create a Supabase session the first time sortState is populated after starting ranking.
+  // We do this in a useEffect because startRanking calls setSortState, which is async —
+  // sortState is still null in handleStartFromReview right after the call.
+  useEffect(() => {
+    const createSession = async () => {
+      if (
+        !user ||
+        !sortState ||
+        !rankingState ||
+        reviewMode ||           // still on review screen — not started yet
+        currentSessionId ||     // session already exists (e.g. resuming)
+        sessionCreated.current  // guard against double-fire
+      ) return;
+
+      sessionCreated.current = true;
+      const saveResult = await saveRankingSession({
+        listId: location.state?.listId,
+        listTitle: rankingState.listTitle,
+        items: rankingState.items,
+        sortState,
+        comparisonsMade: 0,
+        estimatedTotal: rankingState.items.length,
+      });
+      if ('sessionId' in saveResult) {
+        setCurrentSessionId(saveResult.sessionId);
+      }
+    };
+    createSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sortState, rankingState, reviewMode, currentSessionId]);
+
   // Handle completion
   useEffect(() => {
     const handleCompletion = async () => {
@@ -428,21 +460,9 @@ export default function Ranking() {
     setRankingState(prev => prev ? { ...prev, items: reviewItems } : null);
     startRanking(reviewItems);
     setReviewMode(false);
-
-    // Save session if authenticated
-    if (user && sortState) {
-      const result = await saveRankingSession({
-        listId: location.state?.listId,
-        listTitle: rankingState?.listTitle || '',
-        items: reviewItems,
-        sortState,
-        comparisonsMade: 0,
-        estimatedTotal: reviewItems.length,
-      });
-      if ('sessionId' in result) {
-        setCurrentSessionId(result.sessionId);
-      }
-    }
+    // Session creation for auth users is handled by a useEffect that fires
+    // once sortState is actually populated (React state updates are async, so
+    // sortState is still null here even though startRanking just called setSortState).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reviewItems, startRanking, user, rankingState, presetId]);
 
