@@ -141,6 +141,11 @@ export default function Ranking() {
   const [guestSavedSession, setGuestSavedSession] = useState<GuestSession | null>(null);
   const [isSavingAndExiting, setIsSavingAndExiting] = useState(false);
   const sessionCreated = useRef(false);
+  const lastChosenSideRef = useRef<'left' | 'right' | null>(null);
+  const lastChoiceTimeRef = useRef<number>(0);
+  const [streak, setStreak] = useState(0);
+  const [shownMilestone, setShownMilestone] = useState<number | null>(null);
+  const [showMilestone, setShowMilestone] = useState(false);
 
   // Review mode state
   const [reviewMode, setReviewMode] = useState(true);
@@ -399,11 +404,16 @@ export default function Ranking() {
   const handleCardChoice = useCallback(
     (side: 'left' | 'right') => {
       if (isAnimating) return;
+      lastChosenSideRef.current = side;
+      const now = Date.now();
+      if (now - lastChoiceTimeRef.current < 3000) {
+        setStreak(s => s + 1);
+      } else {
+        setStreak(1);
+      }
+      lastChoiceTimeRef.current = now;
       setSelectedCard(side);
-      setTimeout(() => {
-        makeChoice(side);
-        setSelectedCard(null);
-      }, 150);
+      makeChoice(side);
     },
     [isAnimating, makeChoice]
   );
@@ -499,6 +509,40 @@ export default function Ranking() {
   const handleReviewRemove = useCallback((id: string) => {
     setReviewItems(prev => prev.filter(item => item.id !== id));
   }, []);
+
+  // Clear selectedCard when comparison advances
+  useEffect(() => {
+    setSelectedCard(null);
+  }, [comparison]);
+
+  // Keyboard shortcuts: ← → to choose, Z to undo
+  useEffect(() => {
+    if (reviewMode) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!comparison) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'ArrowLeft') handleCardChoice('left');
+      else if (e.key === 'ArrowRight') handleCardChoice('right');
+      else if ((e.key === 'z' || e.key === 'Z') && !e.metaKey && !e.ctrlKey) handleUndo();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [reviewMode, comparison, handleCardChoice, handleUndo]);
+
+  // Milestone celebrations at 25%, 50%, 75%
+  useEffect(() => {
+    if (!progress) return;
+    const pct = Math.round(progress.progress * 100);
+    for (const m of [25, 50, 75]) {
+      if (pct >= m && (shownMilestone === null || m > shownMilestone)) {
+        setShownMilestone(m);
+        setShowMilestone(true);
+        setTimeout(() => setShowMilestone(false), 2500);
+        break;
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress?.progress]);
 
   const currentPrompt = useMemo(() => {
     if (!rankingState) return 'Which do you prefer?';
@@ -758,7 +802,19 @@ export default function Ranking() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col pb-6 sm:pb-8 px-8 sm:px-12">
+    <div className="min-h-screen bg-bg-primary flex flex-col overflow-hidden">
+      {/* Thin progress strip — fixed at very top of viewport */}
+      {progress && (
+        <div className="fixed top-0 left-0 right-0 h-[3px] z-50 bg-white/[0.04]">
+          <motion.div
+            className="h-full bg-gradient-to-r from-violet-700 via-violet-500 to-fuchsia-500"
+            style={{ boxShadow: '0 0 10px rgba(139,92,246,0.9)' }}
+            animate={{ width: `${Math.round(progress.progress * 100)}%` }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+          />
+        </div>
+      )}
+
       {/* Back Confirmation Dialog */}
       <Modal
         isOpen={showBackDialog}
@@ -805,8 +861,29 @@ export default function Ranking() {
         </div>
       </Modal>
 
+      {/* Milestone toast */}
+      <AnimatePresence>
+        {showMilestone && shownMilestone && (
+          <motion.div
+            initial={{ opacity: 0, y: -16, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.92 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            className="fixed top-5 left-1/2 -translate-x-1/2 z-40 pointer-events-none"
+          >
+            <div className="px-4 py-2 rounded-full bg-violet-600/90 backdrop-blur-sm shadow-lg shadow-violet-600/30 border border-violet-400/20">
+              <span className="text-white text-sm font-semibold tracking-tight">
+                {shownMilestone === 25 && '⚡ Quarter way there!'}
+                {shownMilestone === 50 && '🔥 Halfway done!'}
+                {shownMilestone === 75 && '🚀 Almost there!'}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Bar */}
-      <div className="flex items-center justify-between py-4 sm:py-5 border-b border-white/[0.07]">
+      <div className="flex items-center justify-between py-4 sm:py-5 px-8 sm:px-12 border-b border-white/[0.07]">
         <button
           onClick={handleBack}
           className="p-2 -ml-2 rounded-lg text-white/50 hover:text-white/85 hover:bg-white/[0.07] transition-colors touch-target"
@@ -822,12 +899,13 @@ export default function Ranking() {
           >
             {rankingState.listTitle}
           </h1>
-          <p className="text-[11px] text-white/38 mt-0.5">
-            {rankingState.items.length} items
+          <p className="text-[11px] text-white/30 mt-0.5 tabular-nums">
+            {progress
+              ? `${progress.comparisons} of ~${progress.estimatedTotal} comparisons`
+              : `${rankingState.items.length} items`}
           </p>
         </div>
 
-        {/* Save & Exit button — visible once comparisons have started */}
         {progress && progress.comparisons > 0 ? (
           <button
             onClick={handleSaveAndExit}
@@ -844,260 +922,265 @@ export default function Ranking() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center py-4 sm:py-6">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-8 py-4 sm:py-6">
         {/* Comparison Prompt */}
-        <motion.div
-          key={`prompt-${promptIndex}`}
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
-          transition={{ duration: 0.25 }}
-          className="mb-4 sm:mb-6 text-center px-2"
-        >
-          <p
-            className="text-2xl sm:text-3xl font-bold text-white/88 leading-tight tracking-tight"
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={`prompt-${promptIndex}`}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="mb-5 sm:mb-7 text-center text-xl sm:text-2xl font-bold text-white/70 leading-tight tracking-tight px-4"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
             {currentPrompt}
-          </p>
-        </motion.div>
+          </motion.p>
+        </AnimatePresence>
 
         {/* Comparison Cards */}
-        <div className="w-full max-w-2xl">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`comparison-${comparison.left.id}-${comparison.right.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="flex gap-4 sm:gap-6 items-stretch"
+        <div className="w-full max-w-xl sm:max-w-2xl">
+          <div className="flex gap-3 sm:gap-4 items-stretch">
+
+            {/* Left Card */}
+            <motion.button
+              onClick={() => handleCardChoice('left')}
+              disabled={isAnimating}
+              className={`flex-1 group relative rounded-2xl overflow-hidden transition-shadow duration-100 touch-target ${
+                isAnimating ? 'cursor-default' : 'cursor-pointer'
+              } ${
+                selectedCard === 'left'
+                  ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_40px_rgba(139,92,246,0.22)]'
+                  : ''
+              }`}
+              whileHover={!isAnimating ? { scale: 1.03, y: -6 } : {}}
+              whileTap={!isAnimating ? { scale: 0.96 } : {}}
+              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
             >
-              {/* Left Card */}
-              <motion.button
-                onClick={() => handleCardChoice('left')}
-                disabled={isAnimating}
-                className={`flex-1 group relative rounded-2xl overflow-hidden transition-all touch-target ${
-                  isAnimating ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                whileHover={!isAnimating ? { scale: 1.025, y: -2 } : {}}
-                whileTap={!isAnimating ? { scale: 0.975 } : {}}
-              >
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={comparison.left.id}
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{
-                      opacity: 0,
-                      scale: selectedCard === 'left' ? 1.08 : 0.92,
-                      x: selectedCard === 'left' ? 0 : -40,
-                    }}
-                    transition={{ duration: 0.2 }}
-                    className="w-full h-full"
+              <AnimatePresence>
+                <motion.div
+                  key={comparison.left.id}
+                  initial={{ opacity: 0, y: 22, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={
+                    lastChosenSideRef.current === 'left'
+                      ? { opacity: 0, scale: 1.07, y: -18, transition: { duration: 0.16, ease: 'easeIn' } }
+                      : { opacity: 0, scale: 0.8, x: -70, rotate: -9, transition: { duration: 0.2, ease: 'easeIn' } }
+                  }
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="w-full h-full"
+                >
+                  <div
+                    className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
+                      selectedCard === 'left'
+                        ? 'border-violet-400/60'
+                        : 'border-white/[0.09] group-hover:border-white/[0.22]'
+                    }`}
+                    style={{ background: 'rgba(255,255,255,0.04)' }}
                   >
-                    <div
-                      className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-150 ${
-                        selectedCard === 'left'
-                          ? 'border-violet-400/50 shadow-[0_0_0_2px_rgba(139,92,246,0.3)]'
-                          : 'border-white/[0.10] group-hover:border-white/[0.18]'
-                      }`}
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
-                    >
-                      {/* Image */}
-                      <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
-                        {comparison.left.imageUrl ? (
-                          <>
-                            <img
-                              src={comparison.left.imageUrl}
-                              alt={comparison.left.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
-                            <span className="text-white/25 text-center px-4 text-sm">
-                              {comparison.left.title}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Selected overlay */}
-                        <AnimatePresence>
-                          {selectedCard === 'left' && (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              className="absolute inset-0 bg-violet-500/15"
-                            />
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Text */}
-                      <div className="px-3 pt-2.5 pb-2 sm:px-4 flex-1 flex flex-col">
-                        <h3 className="font-bold text-white/92 text-sm sm:text-base text-left leading-tight">
-                          {comparison.left.title}
-                        </h3>
-                        {comparison.left.subtitle && (
-                          <p className="text-white/45 text-xs text-left mt-0.5">
-                            {comparison.left.subtitle}
-                          </p>
-                        )}
-                        <motion.button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemove(comparison.left.id);
-                          }}
-                          disabled={isAnimating}
-                          className="mt-auto pt-1.5 px-2 py-0.5 rounded-md bg-white/[0.06] text-white/35 hover:text-red-400 hover:bg-red-500/10 text-[11px] font-medium transition-colors whitespace-nowrap self-start"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          Haven't seen it
-                        </motion.button>
-                      </div>
+                    {/* Image */}
+                    <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
+                      {comparison.left.imageUrl ? (
+                        <>
+                          <img
+                            src={comparison.left.imageUrl}
+                            alt={comparison.left.title}
+                            className="w-full h-full object-cover"
+                            loading="eager"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
+                          <AnimatePresence>
+                            {selectedCard === 'left' && (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.08 }}
+                                className="absolute inset-0 bg-violet-500/20"
+                              />
+                            )}
+                          </AnimatePresence>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
+                          <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.left.title}</span>
+                        </div>
+                      )}
+                      {/* Skip button — hover overlay */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemove(comparison.left.id); }}
+                        disabled={isAnimating}
+                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150"
+                        title="Skip this item"
+                      >
+                        <X size={11} />
+                      </button>
                     </div>
-                  </motion.div>
-                </AnimatePresence>
-              </motion.button>
+                    {/* Text */}
+                    <div className="px-3 py-2.5 sm:px-4">
+                      <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">
+                        {comparison.left.title}
+                      </h3>
+                      {comparison.left.subtitle && (
+                        <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.left.subtitle}</p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </motion.button>
 
-              {/* VS Divider */}
-              <div className="flex flex-col justify-center items-center flex-shrink-0 px-0.5 sm:px-1">
-                <div
-                  className="w-px"
-                  style={{
-                    height: 56,
-                    background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.10), transparent)',
-                  }}
-                />
-                <span className="my-2.5 text-[10px] font-bold tracking-[0.18em] text-white/22 uppercase select-none">
-                  vs
-                </span>
-                <div
-                  className="w-px"
-                  style={{
-                    height: 56,
-                    background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.10), transparent)',
-                  }}
-                />
-              </div>
-
-              {/* Right Card */}
-              <motion.button
-                onClick={() => handleCardChoice('right')}
-                disabled={isAnimating}
-                className={`flex-1 group relative rounded-2xl overflow-hidden transition-all touch-target ${
-                  isAnimating ? 'cursor-default' : 'cursor-pointer'
-                }`}
-                whileHover={!isAnimating ? { scale: 1.025, y: -2 } : {}}
-                whileTap={!isAnimating ? { scale: 0.975 } : {}}
+            {/* VS Divider */}
+            <div className="flex flex-col justify-center items-center flex-shrink-0 w-8 sm:w-10">
+              <motion.div
+                animate={
+                  selectedCard
+                    ? { scale: 0.75, opacity: 0.2 }
+                    : { scale: [1, 1.14, 1], opacity: [0.45, 0.72, 0.45] }
+                }
+                transition={
+                  selectedCard
+                    ? { duration: 0.1 }
+                    : { duration: 2.8, repeat: Infinity, ease: 'easeInOut' }
+                }
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-violet-500/25 flex items-center justify-center"
+                style={{ background: 'rgba(139,92,246,0.08)', boxShadow: '0 0 14px rgba(139,92,246,0.14)' }}
               >
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={comparison.right.id}
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{
-                      opacity: 0,
-                      scale: selectedCard === 'right' ? 1.08 : 0.92,
-                      x: selectedCard === 'right' ? 0 : 40,
-                    }}
-                    transition={{ duration: 0.2 }}
-                    className="w-full h-full"
+                <span className="text-[9px] font-black tracking-[0.12em] text-violet-300/55 select-none uppercase">vs</span>
+              </motion.div>
+            </div>
+
+            {/* Right Card */}
+            <motion.button
+              onClick={() => handleCardChoice('right')}
+              disabled={isAnimating}
+              className={`flex-1 group relative rounded-2xl overflow-hidden transition-shadow duration-100 touch-target ${
+                isAnimating ? 'cursor-default' : 'cursor-pointer'
+              } ${
+                selectedCard === 'right'
+                  ? 'shadow-[0_0_0_2px_rgba(139,92,246,0.75),0_0_40px_rgba(139,92,246,0.22)]'
+                  : ''
+              }`}
+              whileHover={!isAnimating ? { scale: 1.03, y: -6 } : {}}
+              whileTap={!isAnimating ? { scale: 0.96 } : {}}
+              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            >
+              <AnimatePresence>
+                <motion.div
+                  key={comparison.right.id}
+                  initial={{ opacity: 0, y: 22, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={
+                    lastChosenSideRef.current === 'right'
+                      ? { opacity: 0, scale: 1.07, y: -18, transition: { duration: 0.16, ease: 'easeIn' } }
+                      : { opacity: 0, scale: 0.8, x: 70, rotate: 9, transition: { duration: 0.2, ease: 'easeIn' } }
+                  }
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="w-full h-full"
+                >
+                  <div
+                    className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-100 ${
+                      selectedCard === 'right'
+                        ? 'border-violet-400/60'
+                        : 'border-white/[0.09] group-hover:border-white/[0.22]'
+                    }`}
+                    style={{ background: 'rgba(255,255,255,0.04)' }}
                   >
-                    <div
-                      className={`relative w-full h-full flex flex-col rounded-2xl overflow-hidden border transition-all duration-150 ${
-                        selectedCard === 'right'
-                          ? 'border-violet-400/50 shadow-[0_0_0_2px_rgba(139,92,246,0.3)]'
-                          : 'border-white/[0.10] group-hover:border-white/[0.18]'
-                      }`}
-                      style={{ background: 'rgba(255,255,255,0.04)' }}
-                    >
-                      {/* Image */}
-                      <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
-                        {comparison.right.imageUrl ? (
-                          <>
-                            <img
-                              src={comparison.right.imageUrl}
-                              alt={comparison.right.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
-                            <span className="text-white/25 text-center px-4 text-sm">
-                              {comparison.right.title}
-                            </span>
-                          </div>
-                        )}
-
-                        <AnimatePresence>
-                          {selectedCard === 'right' && (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              className="absolute inset-0 bg-violet-500/15"
-                            />
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Text */}
-                      <div className="px-3 pt-2.5 pb-2 sm:px-4 flex-1 flex flex-col">
-                        <h3 className="font-bold text-white/92 text-sm sm:text-base text-left leading-tight">
-                          {comparison.right.title}
-                        </h3>
-                        {comparison.right.subtitle && (
-                          <p className="text-white/45 text-xs text-left mt-0.5">
-                            {comparison.right.subtitle}
-                          </p>
-                        )}
-                        <motion.button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemove(comparison.right.id);
-                          }}
-                          disabled={isAnimating}
-                          className="mt-auto pt-1.5 px-2 py-0.5 rounded-md bg-white/[0.06] text-white/35 hover:text-red-400 hover:bg-red-500/10 text-[11px] font-medium transition-colors whitespace-nowrap self-start"
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                        >
-                          Haven't seen it
-                        </motion.button>
-                      </div>
+                    {/* Image */}
+                    <div className="relative w-full bg-[#06060e] overflow-hidden aspect-[2/3]">
+                      {comparison.right.imageUrl ? (
+                        <>
+                          <img
+                            src={comparison.right.imageUrl}
+                            alt={comparison.right.title}
+                            className="w-full h-full object-cover"
+                            loading="eager"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" />
+                          <AnimatePresence>
+                            {selectedCard === 'right' && (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.08 }}
+                                className="absolute inset-0 bg-violet-500/20"
+                              />
+                            )}
+                          </AnimatePresence>
+                        </>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-violet-600/15 to-violet-400/5">
+                          <span className="text-white/20 text-center px-4 text-sm font-medium">{comparison.right.title}</span>
+                        </div>
+                      )}
+                      {/* Skip button — hover overlay */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemove(comparison.right.id); }}
+                        disabled={isAnimating}
+                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/35 hover:text-white/80 hover:bg-black/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150"
+                        title="Skip this item"
+                      >
+                        <X size={11} />
+                      </button>
                     </div>
-                  </motion.div>
-                </AnimatePresence>
-              </motion.button>
-            </motion.div>
-          </AnimatePresence>
+                    {/* Text */}
+                    <div className="px-3 py-2.5 sm:px-4">
+                      <h3 className="font-bold text-white/90 text-sm sm:text-[15px] leading-tight text-left">
+                        {comparison.right.title}
+                      </h3>
+                      {comparison.right.subtitle && (
+                        <p className="text-white/40 text-xs mt-0.5 text-left">{comparison.right.subtitle}</p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </motion.button>
+          </div>
         </div>
 
-        {/* Undo */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.3 }}
-          className="mt-8 sm:mt-10"
-        >
+        {/* Bottom controls */}
+        <div className="mt-6 sm:mt-8 flex flex-col items-center gap-3">
+          {/* Streak indicator */}
+          <AnimatePresence>
+            {streak >= 3 && (
+              <motion.div
+                key={streak}
+                initial={{ opacity: 0, scale: 0.75, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.75 }}
+                transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20"
+              >
+                <span className="text-amber-400 text-xs font-bold">⚡ {streak} in a row</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <Button
             onClick={handleUndo}
             disabled={!canUndo || isAnimating}
             variant="ghost"
             size="sm"
-            className="text-white/42 hover:text-white/65"
+            className="text-white/40 hover:text-white/65"
           >
             <Undo2 size={14} />
             Undo
           </Button>
-        </motion.div>
+
+          {/* Keyboard hints — desktop only */}
+          <div className="hidden sm:flex items-center gap-2 text-[11px] text-white/[0.18] mt-0.5">
+            <kbd className="px-1.5 py-0.5 rounded border border-white/[0.10] bg-white/[0.04] font-mono text-[10px] leading-tight">←</kbd>
+            <span className="text-white/[0.15]">left</span>
+            <span className="text-white/[0.10] mx-1.5">·</span>
+            <kbd className="px-1.5 py-0.5 rounded border border-white/[0.10] bg-white/[0.04] font-mono text-[10px] leading-tight">→</kbd>
+            <span className="text-white/[0.15]">right</span>
+            <span className="text-white/[0.10] mx-1.5">·</span>
+            <kbd className="px-1.5 py-0.5 rounded border border-white/[0.10] bg-white/[0.04] font-mono text-[10px] leading-tight">Z</kbd>
+            <span className="text-white/[0.15]">undo</span>
+          </div>
+        </div>
       </div>
 
       {/* Progress Bar */}
@@ -1106,7 +1189,7 @@ export default function Ranking() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="pt-6 sm:pt-8 border-t border-white/[0.07] mt-auto"
+          className="px-8 sm:px-12 pt-4 pb-6 sm:pb-8 border-t border-white/[0.06] mt-auto"
         >
           <ProgressBar
             comparisons={progress.comparisons}

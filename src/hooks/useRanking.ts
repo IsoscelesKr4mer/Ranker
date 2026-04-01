@@ -39,7 +39,7 @@ export function useRanking() {
       }
 
       setIsAnimating(false);
-    }, 280);
+    }, 180);
   }, [sortState, isAnimating]);
 
   const undoChoice = useCallback(() => {
