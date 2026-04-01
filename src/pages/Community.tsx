@@ -7,7 +7,7 @@ import { PageLayout } from '@/components/layout';
 import { getCommunityLists } from '@/lib/database';
 import type { RankList } from '@/types';
 
-const CATEGORIES = ['All', 'Movies', 'TV', 'Games', 'Music', 'Other'];
+const CATEGORIES = ['All', 'Movies', 'TV', 'Games', 'Music', 'Books', 'Other'];
 
 export default function Community() {
   const [selectedCategory, setSelectedCategory] = useState('All');

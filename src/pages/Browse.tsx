@@ -9,7 +9,7 @@ import { isValidLetterboxdUrl } from '@/lib/letterboxd';
 
 type TabType = 'presets' | 'letterboxd' | 'create';
 
-const CATEGORIES = ['All', 'Movies', 'TV', 'Games', 'Music'];
+const CATEGORIES = ['All', 'Movies', 'TV', 'Games', 'Music', 'Books'];
 
 export default function Browse() {
   const navigate = useNavigate();

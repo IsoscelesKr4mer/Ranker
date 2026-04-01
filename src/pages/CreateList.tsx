@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Plus, X, Film, Music, Gamepad2, Utensils, BookOpen,
+  Search, Plus, X, Film, Music, Gamepad2, BookOpen,
   AlertCircle, Image as ImageIcon, Upload, Import, ChevronDown,
-  List, ArrowRight, Calendar,
+  List, ArrowRight, Calendar, BookMarked,
 } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, discoverMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
+import { searchBooks, googleBookToRankItem } from '@/lib/googlebooks';
 import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
 import { saveList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
@@ -22,7 +23,7 @@ const CATEGORIES = [
   { id: 'TV', label: 'TV Shows', icon: Film },
   { id: 'Games', label: 'Games', icon: Gamepad2 },
   { id: 'Music', label: 'Music', icon: Music },
-  { id: 'Food', label: 'Food', icon: Utensils },
+  { id: 'Books', label: 'Books', icon: BookMarked },
   { id: 'Custom', label: 'Custom', icon: BookOpen },
 ];
 
@@ -209,6 +210,9 @@ export default function CreateList() {
         } else if (selectedCategory === 'Music') {
           const { results } = await searchMusic(searchQuery, musicSearchType);
           setSearchResults(results || []);
+        } else if (selectedCategory === 'Books') {
+          const { results } = await searchBooks(searchQuery);
+          setSearchResults(results || []);
         } else {
           const { movies } = await searchMovies(searchQuery);
           setSearchResults(movies || []);
@@ -262,6 +266,7 @@ export default function CreateList() {
     if (selectedCategory === 'Games') rankItem = igdbToRankItem(result);
     else if (selectedCategory === 'TV') rankItem = tmdbTVToRankItem(result);
     else if (selectedCategory === 'Music') rankItem = deezerToRankItem(result);
+    else if (selectedCategory === 'Books') rankItem = googleBookToRankItem(result);
     else rankItem = tmdbToRankItem(result);
 
     const rankItemWithMeta = { ...rankItem, metadata: { ...(rankItem.metadata || {}), searchResultId: result.id } };
@@ -422,7 +427,7 @@ export default function CreateList() {
   const [importExpanded, setImportExpanded] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const isSearchableCategory = ['Movies', 'TV', 'Games', 'Music'].includes(selectedCategory);
+  const isSearchableCategory = ['Movies', 'TV', 'Games', 'Music', 'Books'].includes(selectedCategory);
   const canStartRanking = items.length >= 3 && listTitle.trim();
   const canSave = items.length > 0 && listTitle.trim() && !!user;
 
@@ -431,6 +436,7 @@ export default function CreateList() {
     : selectedCategory === 'Games' ? 'Search games...'
     : selectedCategory === 'Music'
       ? musicSearchType === 'album' ? 'Search albums...' : musicSearchType === 'artist' ? 'Search artists...' : 'Search songs...'
+    : selectedCategory === 'Books' ? 'Search books...'
     : 'Search movies...';
 
   // ── Sidebar / tray shared content ─────────────────────────────────────────
@@ -823,12 +829,15 @@ export default function CreateList() {
                     ).map(result => {
                       const isGame = selectedCategory === 'Games';
                       const isMusic = selectedCategory === 'Music';
+                      const isBook = selectedCategory === 'Books';
                       const displayTitle = isMusic ? result.title : isGame ? result.name : (result.title || result.name);
                       const displaySub = isMusic ? result.artist
                         : isGame ? result.releaseDate
+                        : isBook ? result.author
                         : (result.release_date || result.first_air_date)?.slice(0, 4);
                       const imageUrl = isMusic ? result.imageUrl
                         : isGame ? result.cover
+                        : isBook ? result.imageUrl
                         : result.poster_path ? `https://image.tmdb.org/t/p/w200${result.poster_path}` : null;
                       const isAdded = addedSearchIds.has(result.id);
 
@@ -850,6 +859,7 @@ export default function CreateList() {
                               <div className="w-full h-full bg-white/[0.05] flex items-center justify-center">
                                 {isMusic ? <Music className="w-6 h-6 text-white/20" />
                                   : isGame ? <Gamepad2 className="w-6 h-6 text-white/20" />
+                                  : isBook ? <BookMarked className="w-6 h-6 text-white/20" />
                                   : <Film className="w-6 h-6 text-white/20" />}
                               </div>
                             )}
