@@ -13,40 +13,58 @@ import type { RankItem } from '@/types';
 import { Undo2, X, ArrowLeft, Trophy, Search, Play } from 'lucide-react';
 
 // Prompt rotation system based on category
-const COMPARISON_PROMPTS = {
+const COMPARISON_PROMPTS: Record<string, string[]> = {
   movies: [
-    "You can only watch one ever again. Which one?",
-    "It's movie night. Which are you putting on?",
-    "One gets erased from history. Which do you save?",
-    "Which would you recommend to a friend?",
-    "Which one gets the midnight slot?",
-  ],
-  games: [
-    "You can only play one ever again. Which one?",
-    "Game time. Which are you loading?",
-    "Your shelf is full. Which stays?",
-    "Which one do you boot up at 2am?",
-    "Speedrun this: which one matters most?",
+    "Movie night — which one are you putting on?",
+    "You can only watch one ever again. Which?",
+    "One gets pulled from existence. Which do you save?",
+    "Which would you actually rewatch?",
+    "Which one hits harder?",
   ],
   tv: [
-    "One season left to watch. Which show?",
-    "Binge night. What's your pick?",
-    "Only one series remains. Which survives?",
-    "Which one do you press play on?",
+    "Binge night — which show are you picking?",
+    "You can only finish one series. Which?",
+    "Which one do you actually look forward to?",
+    "One gets cancelled forever. Which do you keep?",
+    "Which would you recommend without hesitation?",
+  ],
+  games: [
+    "One game left on your shelf. Which stays?",
+    "You can only play one ever again. Which?",
+    "Which one do you boot up when you just want to play?",
+    "Which kept you hooked longer?",
+    "One gets deleted from existence. Which do you save?",
   ],
   music: [
+    "Road trip — which gets the aux?",
     "You can only listen to one forever. Which?",
-    "Road trip playlist — which gets the aux?",
-    "One gets erased from history. Which do you save?",
-    "Which one do you put on repeat?",
-    "Desert island pick. Which one?",
+    "Which one actually slaps?",
+    "Desert island pick. Which?",
+    "Which do you keep coming back to?",
+  ],
+  books: [
+    "You can only reread one. Which?",
+    "Which one stuck with you longer?",
+    "One gets pulled from shelves forever. Which do you save?",
+    "Which would you recommend to someone you care about?",
+    "Which left a bigger impression?",
+  ],
+  food: [
+    "Last meal — which one?",
+    "You can only eat one of these forever. Which?",
+    "Which are you actually craving right now?",
+    "Which do you go back to more?",
+    "Be honest — which is better?",
   ],
   default: [
-    "Which do you prefer?",
-    "If you could only keep one, which would it be?",
-    "Which one matters more?",
-    "Which is the winner?",
-    "Your choice.",
+    "You can only keep one. Which survives?",
+    "Be honest — which is actually better?",
+    "Which left a bigger impression on you?",
+    "No hesitation. Which one?",
+    "Which would you defend in an argument?",
+    "One gets erased forever. Which do you save?",
+    "Which do you find yourself coming back to?",
+    "Desert island — one choice only. Which?",
   ],
 };
 
@@ -334,8 +352,8 @@ export default function Ranking() {
   const currentPrompt = useMemo(() => {
     if (!rankingState) return 'Which do you prefer?';
     const prompts =
-      COMPARISON_PROMPTS[rankingState.category as keyof typeof COMPARISON_PROMPTS] ||
-      COMPARISON_PROMPTS.default;
+      COMPARISON_PROMPTS[rankingState.category.toLowerCase()] ??
+      COMPARISON_PROMPTS['default']!;
     return prompts[promptIndex % prompts.length];
   }, [rankingState, promptIndex]);
 
