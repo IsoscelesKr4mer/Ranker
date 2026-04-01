@@ -724,6 +724,7 @@ export default function CreateList() {
 
           {/* Year filter — Movies only */}
           {selectedCategory === 'Movies' && (
+            <div className="space-y-1.5">
             <div className="relative flex items-center">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
               <input
@@ -748,6 +749,10 @@ export default function CreateList() {
                   <X className="w-4 h-4" />
                 </button>
               )}
+            </div>
+            {yearFilter.length === 4 && !searchQuery && (
+              <p className="text-xs text-white/30 pl-1">Showing theatrical releases only</p>
+            )}
             </div>
           )}
 
