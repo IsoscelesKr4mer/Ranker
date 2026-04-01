@@ -192,7 +192,7 @@ export default function CreateList() {
     const hasQuery = searchQuery.trim().length > 0;
     const hasYear = yearFilter.length === 4 && selectedCategory === 'Movies';
 
-    if (!hasQuery && !hasYear) {
+    if (!hasQuery && !hasYear && !selectedPerson) {
       setSearchResults([]);
       setAddedSearchIds(new Set());
       setDiscoverPage(1);
@@ -201,6 +201,9 @@ export default function CreateList() {
       setSearchHasMore(false);
       return;
     }
+
+    // Person filmography already loaded — sort is client-side, nothing to re-fetch
+    if (selectedPerson) return;
 
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
