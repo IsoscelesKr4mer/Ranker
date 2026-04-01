@@ -12,81 +12,80 @@ interface ShareCardProps {
   listTitle: string;
 }
 
-function ShareCardInner({ items, listTitle }: ShareCardProps) {
-  const top5 = items.slice(0, 5);
+function getRankMeta(idx: number) {
+  if (idx === 0) return { color: '#d4a017', label: '★ Champion', bg: 'rgba(212,160,23,0.09)', border: 'rgba(212,160,23,0.55)' };
+  if (idx === 1) return { color: '#8fa3b8', label: 'Runner-Up',  bg: 'transparent',           border: 'rgba(143,163,184,0.3)' };
+  if (idx === 2) return { color: '#b8764a', label: 'Third Place', bg: 'transparent',           border: 'rgba(184,118,74,0.3)' };
+  return { color: 'rgba(255,255,255,0.28)', label: '', bg: 'transparent', border: 'transparent' };
+}
 
-  const rankMeta = [
-    { color: '#d4a017', label: '★ Champion', bg: 'rgba(212,160,23,0.09)', border: 'rgba(212,160,23,0.55)' },
-    { color: '#8fa3b8', label: 'Runner-Up',  bg: 'transparent',           border: 'rgba(143,163,184,0.3)' },
-    { color: '#b8764a', label: 'Third Place', bg: 'transparent',           border: 'rgba(184,118,74,0.3)' },
-    { color: 'rgba(255,255,255,0.3)', label: '', bg: 'transparent', border: 'transparent' },
-    { color: 'rgba(255,255,255,0.3)', label: '', bg: 'transparent', border: 'transparent' },
-  ];
+function ShareCardInner({ items, listTitle }: ShareCardProps) {
+  // Row sizing: #1 is tall, #2-3 are medium, rest are compact
+  const rowPadding = (idx: number) => idx === 0 ? '14px 18px' : idx < 3 ? '10px 18px' : '8px 18px';
+  const numSize   = (idx: number) => idx === 0 ? '32px' : idx < 3 ? '20px' : '16px';
+  const titleSize = (idx: number) => idx === 0 ? '22px' : idx < 3 ? '18px' : '15px';
+  const titleWeight = (idx: number) => idx === 0 ? 700 : idx < 3 ? 600 : 500;
+  const titleColor  = (idx: number) => idx === 0 ? '#ffffff' : idx < 3 ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.72)';
+  const subSize   = (idx: number) => idx < 3 ? '12px' : '11px';
 
   return (
     <div
       style={{
         width: '1200px',
-        height: '630px',
         background: 'linear-gradient(145deg, #0a0815 0%, #07070f 55%, #0e0b1c 100%)',
-        overflow: 'hidden',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
         color: '#ffffff',
         boxSizing: 'border-box',
         position: 'relative',
       }}
     >
-      {/* Atmospheric glows */}
-      <div style={{ position: 'absolute', top: '-120px', left: '-80px', width: '520px', height: '520px', background: 'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '-80px', right: '-40px', width: '380px', height: '360px', background: 'radial-gradient(circle, rgba(212,160,23,0.09) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      {/* Noise grain */}
-      <div style={{ position: 'absolute', inset: 0, opacity: 0.025, backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\'/%3E%3C/svg%3E")', pointerEvents: 'none' }} />
+      {/* Atmospheric glows — fixed position so they always show at top/bottom */}
+      <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '520px', height: '520px', background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: '0', right: '0', width: '400px', height: '400px', background: 'radial-gradient(circle at top right, rgba(124,58,237,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
-      <div style={{ padding: '56px 68px', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-        {/* Header row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div style={{ padding: '52px 68px 56px', position: 'relative' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', marginBottom: '10px' }}>
               My Ranking
             </div>
-            <div style={{ fontSize: '38px', fontWeight: 800, color: '#ffffff', lineHeight: 1.08, maxWidth: '780px', letterSpacing: '-0.01em' }}>
+            <div style={{ fontSize: '36px', fontWeight: 800, color: '#ffffff', lineHeight: 1.08, maxWidth: '900px', letterSpacing: '-0.01em' }}>
               {listTitle}
             </div>
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.18)', letterSpacing: '0.2em', textTransform: 'uppercase', paddingTop: '4px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'rgba(255,255,255,0.15)', letterSpacing: '0.2em', textTransform: 'uppercase', paddingTop: '4px', flexShrink: 0 }}>
             RANKER
           </div>
         </div>
 
         {/* Divider */}
-        <div style={{ height: '1px', background: 'linear-gradient(to right, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)', marginBottom: '22px' }} />
+        <div style={{ height: '1px', background: 'linear-gradient(to right, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)', marginBottom: '18px' }} />
 
-        {/* Items */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          {top5.map((item, idx) => {
-            const meta = rankMeta[idx] ?? rankMeta[3];
-            const isFirst = idx === 0;
-
+        {/* All items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {items.map((item, idx) => {
+            const meta = getRankMeta(idx);
             return (
               <div
                 key={item.id}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '22px',
-                  padding: isFirst ? '15px 18px' : '10px 18px',
+                  gap: '20px',
+                  padding: rowPadding(idx),
                   background: meta.bg,
-                  borderRadius: '10px',
+                  borderRadius: '8px',
                   borderLeft: `3px solid ${meta.border}`,
                 }}
               >
                 {/* Rank number */}
                 <div style={{
-                  fontSize: isFirst ? '34px' : '22px',
+                  fontSize: numSize(idx),
                   fontWeight: 900,
                   color: meta.color,
                   lineHeight: 1,
-                  width: '56px',
+                  width: '48px',
                   textAlign: 'right',
                   flexShrink: 0,
                   letterSpacing: '-0.02em',
@@ -94,30 +93,30 @@ function ShareCardInner({ items, listTitle }: ShareCardProps) {
                   {String(idx + 1).padStart(2, '0')}
                 </div>
 
-                {/* Divider */}
-                <div style={{ width: '1px', height: isFirst ? '36px' : '28px', background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />
+                {/* Vertical rule */}
+                <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
 
                 {/* Text */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: isFirst ? '24px' : '19px',
-                    fontWeight: isFirst ? 700 : 600,
-                    color: isFirst ? '#ffffff' : 'rgba(255,255,255,0.82)',
+                    fontSize: titleSize(idx),
+                    fontWeight: titleWeight(idx),
+                    color: titleColor(idx),
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    lineHeight: 1.2,
+                    lineHeight: 1.25,
                   }}>
                     {item.title}
                   </div>
                   {item.subtitle && (
-                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.36)', marginTop: '3px' }}>
+                    <div style={{ fontSize: subSize(idx), color: 'rgba(255,255,255,0.32)', marginTop: '2px' }}>
                       {item.subtitle}
                     </div>
                   )}
                 </div>
 
-                {/* Medal label */}
+                {/* Medal label (top 3 only) */}
                 {meta.label && (
                   <div style={{
                     fontSize: '10px',
@@ -136,9 +135,9 @@ function ShareCardInner({ items, listTitle }: ShareCardProps) {
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '24px' }}>
           <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.06)' }} />
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em' }}>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.08em' }}>
             Make your own ranking at ranker.app
           </div>
         </div>
@@ -361,7 +360,7 @@ export function ShareModal({ isOpen, onClose, listTitle, items, shareLink, isSav
 
         {/* Preview label */}
         <p className="text-[10px] text-white/20 text-center mt-5 tracking-wide uppercase">
-          Image preview: {Math.min(items.length, 5)} of {items.length} items shown
+          Image includes all {items.length} item{items.length !== 1 ? 's' : ''}
         </p>
       </Modal>
     </>
