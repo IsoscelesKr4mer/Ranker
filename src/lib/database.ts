@@ -5,9 +5,9 @@ import type { RankItem, RankList, RankingSession, MergeSortState, PublicProfile 
 
 const SAVE_TIMEOUT_MS = 15_000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, message = 'Request timed out'): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, message = 'Request timed out'): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
   ]);
 }
