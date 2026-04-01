@@ -5,6 +5,7 @@ import { ArrowLeft, Share2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
+import { ShareModal } from '@/components/ShareModal';
 import { getResultById, deleteResult } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
@@ -16,6 +17,7 @@ export default function SavedResult() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [result, setResult] = useState<{
     id: string;
     listTitle: string;
@@ -65,12 +67,9 @@ export default function SavedResult() {
     }
   };
 
-  const handleShare = async () => {
-    if (result?.shareId) {
-      const link = `${window.location.origin}/shared/${result.shareId}`;
-      await navigator.clipboard.writeText(link);
-    }
-  };
+  const shareLink = result?.shareId
+    ? `${window.location.origin}/shared/${result.shareId}`
+    : null;
 
   if (loading) {
     return (
@@ -150,9 +149,9 @@ export default function SavedResult() {
             </Button>
           </Link>
           {result.shareId && (
-            <Button variant="secondary" size="md" onClick={handleShare}>
+            <Button variant="secondary" size="md" onClick={() => setShareModalOpen(true)}>
               <Share2 className="w-4 h-4" />
-              Copy Share Link
+              Share
             </Button>
           )}
           {confirmDelete ? (
@@ -175,6 +174,17 @@ export default function SavedResult() {
           )}
         </motion.div>
       </div>
+
+      {shareLink && (
+        <ShareModal
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          listTitle={listTitle}
+          items={items}
+          shareLink={shareLink}
+          isSavingLink={false}
+        />
+      )}
     </PageLayout>
   );
 }

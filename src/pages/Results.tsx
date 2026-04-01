@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Share2, RotateCcw, Grid3X3, Save, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
+import { ShareModal } from '@/components/ShareModal';
 import { useAuthStore } from '@/store/authStore';
 import { saveRankingResult } from '@/lib/database';
 import type { RankItem } from '@/types';
@@ -22,11 +23,12 @@ export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const [copyFeedback, setCopyFeedback] = useState(false);
-  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSavingLink, setIsSavingLink] = useState(false);
   const [savedResultId, setSavedResultId] = useState<string | null>(null);
+  const [profileSaveState, setProfileSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Try location state first, then fall back to sessionStorage (for post-auth redirects)
   const locationState = location.state as ResultsState | null;
@@ -80,55 +82,38 @@ export default function Results() {
     navigate('/auth');
   };
 
-  const handleSaveAndShare = async () => {
+  // Kick off saving for the share link (public) in the background
+  const ensureShareLink = useCallback(async () => {
+    if (shareLink || isSavingLink || savedResultId) return;
+    setIsSavingLink(true);
+    try {
+      const response = await saveRankingResult({
+        sessionId: state?.sessionId,
+        listTitle,
+        results: result,
+        comparisonsMade: comparisons,
+        isPublic: true,
+      });
+      if (!('error' in response)) {
+        setSavedResultId(response.resultId);
+        if (response.shareId) {
+          setShareLink(`${window.location.origin}/shared/${response.shareId}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to create share link:', err);
+    } finally {
+      setIsSavingLink(false);
+    }
+  }, [shareLink, isSavingLink, savedResultId, state, listTitle, result, comparisons]);
+
+  const handleOpenShareModal = () => {
     if (!user) {
       saveAndRedirectToAuth();
       return;
     }
-
-    try {
-      setSaveState('saving');
-      setSaveError(null);
-
-      if (!savedResultId) {
-        const response = await saveRankingResult({
-          sessionId: state?.sessionId,
-          listTitle,
-          results: result,
-          comparisonsMade: comparisons,
-          isPublic: true,
-        });
-
-        if ('error' in response) {
-          setSaveState('error');
-          setSaveError(response.error);
-          setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
-          return;
-        }
-
-        setSavedResultId(response.resultId);
-
-        if (response.shareId) {
-          const link = `${window.location.origin}/shared/${response.shareId}`;
-          setShareLink(link);
-          await navigator.clipboard.writeText(link);
-          setCopyFeedback(true);
-          setTimeout(() => setCopyFeedback(false), 2000);
-        }
-      } else if (shareLink) {
-        await navigator.clipboard.writeText(shareLink);
-        setCopyFeedback(true);
-        setTimeout(() => setCopyFeedback(false), 2000);
-      }
-
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2000);
-    } catch (err) {
-      console.error('Failed to share results:', err);
-      setSaveState('error');
-      setSaveError('Failed to create shareable link');
-      setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
-    }
+    setShareModalOpen(true);
+    ensureShareLink();
   };
 
   const handleSaveToProfile = async () => {
@@ -138,13 +123,13 @@ export default function Results() {
     }
 
     if (savedResultId) {
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2000);
+      setProfileSaveState('saved');
+      setTimeout(() => setProfileSaveState('idle'), 2000);
       return;
     }
 
     try {
-      setSaveState('saving');
+      setProfileSaveState('saving');
       setSaveError(null);
 
       const response = await saveRankingResult({
@@ -156,25 +141,21 @@ export default function Results() {
       });
 
       if ('error' in response) {
-        setSaveState('error');
+        setProfileSaveState('error');
         setSaveError(response.error);
-        setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
+        setTimeout(() => { setProfileSaveState('idle'); setSaveError(null); }, 3000);
         return;
       }
 
       setSavedResultId(response.resultId);
-      setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 2000);
+      setProfileSaveState('saved');
+      setTimeout(() => setProfileSaveState('idle'), 2000);
     } catch (err) {
       console.error('Failed to save ranking:', err);
-      setSaveState('error');
+      setProfileSaveState('error');
       setSaveError('Failed to save ranking to profile');
-      setTimeout(() => { setSaveState('idle'); setSaveError(null); }, 3000);
+      setTimeout(() => { setProfileSaveState('idle'); setSaveError(null); }, 3000);
     }
-  };
-
-  const handleRankAgain = () => {
-    navigate('/browse');
   };
 
   return (
@@ -213,7 +194,7 @@ export default function Results() {
           <RankingDisplay items={result} />
         </motion.div>
 
-        {/* Error / Share link feedback */}
+        {/* Error feedback */}
         {saveError && (
           <motion.div
             className="p-4 bg-red-500/10 border border-red-500/25 rounded-xl text-red-300 text-sm"
@@ -221,17 +202,6 @@ export default function Results() {
             animate={{ opacity: 1 }}
           >
             {saveError}
-          </motion.div>
-        )}
-
-        {shareLink && (
-          <motion.div
-            className="p-4 bg-green-500/10 border border-green-500/25 rounded-xl"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <p className="text-sm text-green-300 mb-2 font-medium">Share link copied to clipboard!</p>
-            <code className="text-xs text-green-200/70 break-all">{shareLink}</code>
           </motion.div>
         )}
 
@@ -243,28 +213,13 @@ export default function Results() {
           transition={{ duration: 0.4, delay: 0.4 }}
         >
           <Button
-            onClick={handleSaveAndShare}
-            variant={copyFeedback || saveState === 'saved' ? 'secondary' : 'primary'}
+            onClick={handleOpenShareModal}
+            variant="primary"
             size="lg"
             fullWidth
-            disabled={saveState === 'saving'}
           >
-            {saveState === 'saving' ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Creating link...
-              </>
-            ) : copyFeedback || saveState === 'saved' ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                Link Copied!
-              </>
-            ) : (
-              <>
-                <Share2 className="w-4 h-4" />
-                Share Results
-              </>
-            )}
+            <Share2 className="w-4 h-4" />
+            Share Results
           </Button>
 
           <Button
@@ -272,14 +227,14 @@ export default function Results() {
             variant="secondary"
             size="lg"
             fullWidth
-            disabled={saveState === 'saving'}
+            disabled={profileSaveState === 'saving'}
           >
-            {saveState === 'saving' ? (
+            {profileSaveState === 'saving' ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Saving...
               </>
-            ) : saveState === 'saved' ? (
+            ) : profileSaveState === 'saved' ? (
               <>
                 <CheckCircle2 className="w-4 h-4" />
                 Saved!
@@ -292,7 +247,7 @@ export default function Results() {
             )}
           </Button>
 
-          <Button onClick={handleRankAgain} variant="secondary" size="lg" fullWidth>
+          <Button onClick={() => navigate('/browse')} variant="secondary" size="lg" fullWidth>
             <RotateCcw className="w-4 h-4" />
             Rank Again
           </Button>
@@ -305,6 +260,16 @@ export default function Results() {
           </Link>
         </motion.div>
       </div>
+
+      {/* Share modal */}
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        listTitle={listTitle}
+        items={result}
+        shareLink={shareLink}
+        isSavingLink={isSavingLink}
+      />
     </PageLayout>
   );
 }
