@@ -15,8 +15,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const maxResults = Math.min(parseInt(limit as string) || 20, 40);
+    const titleQuery = `intitle:${q}`;
     const response = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=${maxResults}&printType=books&key=${GOOGLE_BOOKS_API_KEY}`,
+      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(titleQuery)}&maxResults=${maxResults}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
       { headers: { 'Accept': 'application/json' } }
     );
 
