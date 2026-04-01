@@ -802,7 +802,7 @@ export default function Ranking() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden">
       {/* Thin progress strip — fixed at very top of viewport */}
       {progress && (
         <div className="fixed top-0 left-0 right-0 h-[3px] z-50 bg-white/[0.04]">
