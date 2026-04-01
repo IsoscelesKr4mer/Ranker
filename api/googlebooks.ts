@@ -13,19 +13,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Google Books API key not configured' });
   }
 
-  try {
-    const maxResults = Math.min(parseInt(limit as string) || 20, 40);
-    const titleQuery = type === 'author' ? `inauthor:${q}` : `intitle:${q}`;
+  const fetchBooks = async (queryStr: string, maxResults: number) => {
     const response = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(titleQuery)}&maxResults=${maxResults}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
+      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}&printType=books&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
       { headers: { 'Accept': 'application/json' } }
     );
+    if (!response.ok) throw new Error(`Google Books API error: ${response.status}`);
+    return response.json();
+  };
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Google Books API error' });
+  try {
+    const maxResults = Math.min(parseInt(limit as string) || 20, 40);
+
+    let data: any;
+    if (type === 'author') {
+      // Try strict inauthor: first; fall back to plain search if empty
+      data = await fetchBooks(`inauthor:${q}`, maxResults);
+      if (!data.items || data.items.length === 0) {
+        data = await fetchBooks(q as string, maxResults);
+      }
+    } else {
+      data = await fetchBooks(`intitle:${q}`, maxResults);
     }
-
-    const data = await response.json();
 
     const results = (data.items || []).map((item: any) => {
       const info = item.volumeInfo || {};
