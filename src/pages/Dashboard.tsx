@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2, UserCircle, Check, AlertCircle, Camera } from 'lucide-react';
+import { BarChart3, TrendingUp, Plus, Grid3X3, Import, Users, Trash2, UserCircle, Check, AlertCircle, Camera, Pencil } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { useAuthStore } from '@/store/authStore';
@@ -19,6 +19,7 @@ import {
 import type { RankList, RankingSession } from '@/types';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { user, status, needsUsername, setUser, setNeedsUsername } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ listsCreated: 0, rankingsCompleted: 0, comparisonsMade: 0 });
@@ -590,6 +591,17 @@ export default function Dashboard() {
                       <div className="text-violet-400 text-sm font-medium">Rank →</div>
                     </Card>
                   </Link>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      navigate('/create', { state: { editList: list } });
+                    }}
+                    className="p-2.5 rounded-lg text-white/20 hover:text-violet-400 hover:bg-violet-500/10 transition-colors flex-shrink-0"
+                    title="Edit list"
+                  >
+                    <Pencil size={16} />
+                  </button>
                   <button
                     onClick={async (e) => {
                       e.preventDefault();

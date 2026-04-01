@@ -148,6 +148,64 @@ export async function deleteList(listId: string): Promise<{ error?: string }> {
   return {};
 }
 
+export async function updateList(
+  listId: string,
+  params: {
+    title: string;
+    category: string;
+    items: RankItem[];
+    isCommunity?: boolean;
+    tags?: string[];
+  }
+): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  // Update list metadata
+  const { error: listError } = await withTimeout(
+    supabase
+      .from('lists')
+      .update({
+        title: params.title,
+        category: params.category,
+        item_count: params.items.length,
+        is_community: params.isCommunity ?? false,
+        cover_image_url: params.items[0]?.imageUrl || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', listId)
+      .eq('creator_id', user.id),
+    SAVE_TIMEOUT_MS
+  );
+
+  if (listError) return { error: listError.message };
+
+  // Replace all items: delete old, insert new
+  await withTimeout(
+    supabase.from('list_items').delete().eq('list_id', listId),
+    SAVE_TIMEOUT_MS
+  );
+
+  const newItems = params.items.map((item, index) => ({
+    list_id: listId,
+    title: item.title,
+    image_url: item.imageUrl,
+    subtitle: item.subtitle,
+    metadata: item.metadata || {},
+    position: index,
+  }));
+
+  const { error: itemsError } = await withTimeout(
+    supabase.from('list_items').insert(newItems),
+    SAVE_TIMEOUT_MS
+  );
+
+  if (itemsError) return { error: itemsError.message };
+  return {};
+}
+
 export async function getListById(listId: string): Promise<RankList | null> {
   if (!isSupabaseConfigured()) return null;
 

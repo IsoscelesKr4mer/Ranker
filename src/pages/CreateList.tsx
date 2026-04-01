@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, X, Film, Music, Gamepad2, BookOpen,
   AlertCircle, Image as ImageIcon, Upload, Import, ChevronDown,
-  List, ArrowRight, Calendar, BookMarked,
+  List, ArrowRight, Calendar, BookMarked, Pencil, Copy,
 } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
 import { searchMovies, searchTV, discoverMovies, searchPerson, getPersonMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
@@ -12,11 +12,11 @@ import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
 import { searchBooks, googleBookToRankItem } from '@/lib/googlebooks';
 import { isValidLetterboxdUrl, importLetterboxdList } from '@/lib/letterboxd';
-import { saveList } from '@/lib/database';
+import { saveList, updateList } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LibraryImage } from '@/components/ImageLibrary';
-import type { RankItem } from '@/types';
+import type { RankItem, RankList } from '@/types';
 
 const CATEGORIES = [
   { id: 'Movies', label: 'Movies', icon: Film },
@@ -40,6 +40,7 @@ export default function CreateList() {
   const { user } = useAuthStore();
 
   // ── Form state ────────────────────────────────────────────────────────────
+  const [editListId, setEditListId] = useState<string | null>(null); // non-null = edit mode
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Movies');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
@@ -99,6 +100,29 @@ export default function CreateList() {
       setLetterboxdImporting(false);
     }
   }, [letterboxdUrl]);
+
+  // Pre-populate form when editing an existing list
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    const state = location.state as { editList?: RankList; letterboxdUrl?: string } | null;
+    if (state?.editList) {
+      hasInitialized.current = true;
+      const list = state.editList;
+      setEditListId(list.id);
+      setListTitle(list.title);
+      setSelectedCategory(list.category);
+      setItems(list.items);
+      // Restore any searchResultIds so toggling works correctly
+      const addedIds = new Set<string | number>();
+      list.items.forEach(item => {
+        if (item.metadata?.searchResultId !== undefined) {
+          addedIds.add(item.metadata.searchResultId as string | number);
+        }
+      });
+      setAddedSearchIds(addedIds);
+    }
+  }, [location.state]);
 
   // Auto-import if arriving from Browse page with a Letterboxd URL
   const hasAutoImported = useRef(false);
@@ -461,6 +485,41 @@ export default function CreateList() {
     } finally { setIsSaving(false); }
   };
 
+  // Edit mode: overwrite the existing list in place
+  const handleSaveChanges = async () => {
+    if (!listTitle.trim() || items.length === 0 || !editListId) return;
+    if (!user) { setSaveError('Sign in to save your list.'); return; }
+    setSaveError(null); setIsSaving(true);
+    try {
+      const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      const result = await updateList(editListId, { title: listTitle, category: selectedCategory, items, isCommunity, tags });
+      if (result.error) { setSaveError(result.error); }
+      else { setSavedSuccess(true); setTimeout(() => setSavedSuccess(false), 4000); }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save changes');
+    } finally { setIsSaving(false); }
+  };
+
+  // Edit mode: save as a brand-new list (keeps original untouched)
+  const handleSaveAsNew = async () => {
+    if (!listTitle.trim() || items.length === 0) return;
+    if (!user) { setSaveError('Sign in to save your list.'); return; }
+    setSaveError(null); setIsSaving(true);
+    try {
+      const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      const result = await saveList({ title: listTitle, category: selectedCategory, source: 'web', items, isCommunity, isPublic: true, tags });
+      if ('error' in result) { setSaveError(result.error); }
+      else {
+        // Switch to editing the newly created list
+        setEditListId(result.listId);
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 4000);
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save list');
+    } finally { setIsSaving(false); }
+  };
+
   // ── UI state ──────────────────────────────────────────────────────────────
   const [isTrayOpen, setIsTrayOpen] = useState(false);
   const [importExpanded, setImportExpanded] = useState(false);
@@ -614,7 +673,7 @@ export default function CreateList() {
         {savedSuccess && (
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
             className="px-3 py-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-            <p className="text-xs text-emerald-300">List saved{isCommunity ? ' to community' : ''}! Check your dashboard.</p>
+            <p className="text-xs text-emerald-300">{editListId ? 'Changes saved!' : `List saved${isCommunity ? ' to community' : ''}! Check your dashboard.`}</p>
           </motion.div>
         )}
         {saveError && (
@@ -628,25 +687,61 @@ export default function CreateList() {
 
       {/* Action buttons */}
       <div className="space-y-2 pt-1">
-        <button
-          onClick={handleStartRanking}
-          disabled={!canStartRanking || isSaving}
-          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${
-            canStartRanking
-              ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-600/20'
-              : 'bg-white/[0.06] text-white/50 border border-white/[0.10]'
-          }`}
-        >
-          {isSaving ? <><Spinner /> Saving...</> : <>Save & Start Ranking <ArrowRight className="w-4 h-4" /></>}
-        </button>
-        {user && (
-          <button
-            onClick={handleSaveListOnly}
-            disabled={!canSave || isSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/[0.05] text-white/60 border border-white/[0.08] hover:bg-white/[0.09] hover:text-white/80 transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isSaving ? <Spinner /> : 'Save List Only'}
-          </button>
+        {editListId ? (
+          // ── Edit mode ──────────────────────────────────────────────────────
+          <>
+            <button
+              onClick={handleSaveChanges}
+              disabled={!canSave || isSaving}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${
+                canSave
+                  ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-600/20'
+                  : 'bg-white/[0.06] text-white/50 border border-white/[0.10]'
+              }`}
+            >
+              {isSaving ? <><Spinner /> Saving...</> : <><Pencil className="w-4 h-4" /> Save Changes</>}
+            </button>
+            <button
+              onClick={handleStartRanking}
+              disabled={!canStartRanking || isSaving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/[0.05] text-white/60 border border-white/[0.08] hover:bg-white/[0.09] hover:text-white/80 transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isSaving ? <Spinner /> : <>Start Ranking <ArrowRight className="w-3.5 h-3.5" /></>}
+            </button>
+            {user && (
+              <button
+                onClick={handleSaveAsNew}
+                disabled={!canSave || isSaving}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/[0.05] text-white/60 border border-white/[0.08] hover:bg-white/[0.09] hover:text-white/80 transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isSaving ? <Spinner /> : <><Copy className="w-3.5 h-3.5" /> Save as New List</>}
+              </button>
+            )}
+          </>
+        ) : (
+          // ── Create mode ────────────────────────────────────────────────────
+          <>
+            <button
+              onClick={handleStartRanking}
+              disabled={!canStartRanking || isSaving}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${
+                canStartRanking
+                  ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-600/20'
+                  : 'bg-white/[0.06] text-white/50 border border-white/[0.10]'
+              }`}
+            >
+              {isSaving ? <><Spinner /> Saving...</> : <>Save & Start Ranking <ArrowRight className="w-4 h-4" /></>}
+            </button>
+            {user && (
+              <button
+                onClick={handleSaveListOnly}
+                disabled={!canSave || isSaving}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/[0.05] text-white/60 border border-white/[0.08] hover:bg-white/[0.09] hover:text-white/80 transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isSaving ? <Spinner /> : 'Save List Only'}
+              </button>
+            )}
+          </>
         )}
         {!listTitle.trim() && items.length > 0 && (
           <p className="text-center text-[11px] text-amber-400/80 pt-0.5">
@@ -870,8 +965,11 @@ export default function CreateList() {
             </div>
           )}
 
-          {/* Sort controls — shown in year mode once a valid year is entered */}
-          {selectedCategory === 'Movies' && movieSearchType === 'year' && yearFilter.length === 4 && (
+          {/* Sort controls — shown in year mode or when a person filmography is loaded */}
+          {selectedCategory === 'Movies' && (
+            (movieSearchType === 'year' && yearFilter.length === 4) ||
+            selectedPerson
+          ) && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-white/35 font-medium shrink-0">Sort by</span>
               {(
@@ -887,13 +985,13 @@ export default function CreateList() {
                   onClick={() => {
                     if (discoverSortBy !== opt.value) {
                       setDiscoverSortBy(opt.value);
-                      // Year-browse mode: refetch from server with new sort
-                      if (!searchQuery) {
+                      // Year-browse (no text query, no person): refetch from server with new sort
+                      if (!searchQuery && !selectedPerson) {
                         setDiscoverPage(1);
                         setDiscoverTotalPages(1);
                         setSearchResults([]);
                       }
-                      // Text-search mode: results are sorted client-side, no refetch needed
+                      // Person mode & text-search mode: sorted client-side, no refetch needed
                     }
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -964,7 +1062,7 @@ export default function CreateList() {
                   <div className="py-12 text-center text-white/25 text-sm">No results found</div>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
-                    {(searchQuery && selectedCategory === 'Movies' && yearFilter.length === 4
+                    {(selectedCategory === 'Movies' && (selectedPerson || (searchQuery && yearFilter.length === 4))
                       ? [...searchResults].sort((a, b) => {
                           if (discoverSortBy === 'title.asc') return (a.title || '').localeCompare(b.title || '');
                           if (discoverSortBy === 'title.desc') return (b.title || '').localeCompare(a.title || '');
@@ -1252,7 +1350,7 @@ export default function CreateList() {
           {isTrayOpen && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
+              animate={{ height: "auto",  opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="overflow-hidden border-t border-white/[0.07]"
