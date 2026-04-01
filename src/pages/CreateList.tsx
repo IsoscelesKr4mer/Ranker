@@ -40,7 +40,7 @@ export default function CreateList() {
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [listTitle, setListTitle] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Custom');
+  const [selectedCategory, setSelectedCategory] = useState('Movies');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
   const [isCommunity, setIsCommunity] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
