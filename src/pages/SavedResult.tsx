@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Share2, Trash2 } from 'lucide-react';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
 import { ShareModal } from '@/components/ShareModal';
-import { getResultById, deleteResult } from '@/lib/database';
+import { getResultById, deleteResult, makeResultPublic } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
 
@@ -18,6 +18,8 @@ export default function SavedResult() {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [isSavingLink, setIsSavingLink] = useState(false);
   const [result, setResult] = useState<{
     id: string;
     listTitle: string;
@@ -37,6 +39,10 @@ export default function SavedResult() {
     getResultById(resultId)
       .then((data) => {
         setResult(data);
+        // Populate share link if the result is already public
+        if (data?.shareId) {
+          setShareLink(`${window.location.origin}/shared/${data.shareId}`);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -67,9 +73,26 @@ export default function SavedResult() {
     }
   };
 
-  const shareLink = result?.shareId
-    ? `${window.location.origin}/shared/${result.shareId}`
-    : null;
+  // Generate a share link on demand (makes the result public if it isn't already)
+  const ensureShareLink = useCallback(async () => {
+    if (!result || shareLink || isSavingLink) return;
+    setIsSavingLink(true);
+    try {
+      const res = await makeResultPublic(result.id);
+      if ('shareId' in res) {
+        setShareLink(`${window.location.origin}/shared/${res.shareId}`);
+      }
+    } catch (err) {
+      console.error('Failed to generate share link:', err);
+    } finally {
+      setIsSavingLink(false);
+    }
+  }, [result, shareLink, isSavingLink]);
+
+  const handleOpenShareModal = () => {
+    setShareModalOpen(true);
+    ensureShareLink();
+  };
 
   if (loading) {
     return (
@@ -137,54 +160,54 @@ export default function SavedResult() {
 
         {/* Actions */}
         <motion.div
-          className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
         >
-          <Link to="/dashboard">
-            <Button variant="secondary" size="md">
+          <Link to="/dashboard" className="w-full">
+            <Button variant="secondary" size="lg" fullWidth>
               <ArrowLeft className="w-4 h-4" />
               Dashboard
             </Button>
           </Link>
-          {result.shareId && (
-            <Button variant="secondary" size="md" onClick={() => setShareModalOpen(true)}>
-              <Share2 className="w-4 h-4" />
-              Share
-            </Button>
-          )}
-          {confirmDelete ? (
-            <div className="flex items-center gap-2">
-              <Button variant="primary" size="md" onClick={handleDelete} disabled={deleting}>
-                {deleting ? 'Deleting...' : 'Yes, Delete'}
-              </Button>
-              <Button variant="secondary" size="md" onClick={() => setConfirmDelete(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
-          )}
+
+          <Button variant="primary" size="lg" fullWidth onClick={handleOpenShareModal}>
+            <Share2 className="w-4 h-4" />
+            Share Results
+          </Button>
+
+          <div className="sm:col-span-2 flex justify-center">
+            {confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <Button variant="primary" size="md" onClick={handleDelete} disabled={deleting}>
+                  {deleting ? 'Deleting...' : 'Yes, Delete'}
+                </Button>
+                <Button variant="secondary" size="md" onClick={() => setConfirmDelete(false)}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
+          </div>
         </motion.div>
       </div>
 
-      {shareLink && (
-        <ShareModal
-          isOpen={shareModalOpen}
-          onClose={() => setShareModalOpen(false)}
-          listTitle={listTitle}
-          items={items}
-          shareLink={shareLink}
-          isSavingLink={false}
-        />
-      )}
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        listTitle={listTitle}
+        items={items}
+        shareLink={shareLink}
+        isSavingLink={isSavingLink}
+      />
     </PageLayout>
   );
 }

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
+import { ShareModal } from '@/components/ShareModal';
 import { getSharedResult } from '@/lib/database';
 import type { RankItem } from '@/types';
 
 export default function SharedResult() {
   const { shareId } = useParams<{ shareId: string }>();
   const [loading, setLoading] = useState(true);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [result, setResult] = useState<{
     listTitle: string;
     results: RankItem[];
@@ -53,6 +55,8 @@ export default function SharedResult() {
   }
 
   const { results: items, listTitle, comparisonsMade } = result;
+  // The share link is simply the current page URL
+  const shareLink = window.location.href;
 
   return (
     <PageLayout maxWidth="xl">
@@ -90,21 +94,35 @@ export default function SharedResult() {
           <RankingDisplay items={items} />
         </motion.div>
 
-        {/* CTA */}
+        {/* CTAs */}
         <motion.div
-          className="flex flex-col items-center gap-3 pt-2"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
         >
-          <Link to="/browse">
-            <Button size="lg">
+          <Link to="/browse" className="w-full">
+            <Button variant="secondary" size="lg" fullWidth>
               <ArrowLeft className="w-4 h-4" />
               Make Your Own Ranking
             </Button>
           </Link>
+
+          <Button variant="primary" size="lg" fullWidth onClick={() => setShareModalOpen(true)}>
+            <Share2 className="w-4 h-4" />
+            Share
+          </Button>
         </motion.div>
       </div>
+
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        listTitle={listTitle}
+        items={items}
+        shareLink={shareLink}
+        isSavingLink={false}
+      />
     </PageLayout>
   );
 }

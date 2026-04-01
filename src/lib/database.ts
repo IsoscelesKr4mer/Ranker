@@ -404,6 +404,24 @@ export async function getResultById(resultId: string): Promise<{
   };
 }
 
+export async function makeResultPublic(resultId: string): Promise<{ shareId: string } | { error: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const shareId = generateShareId();
+
+  const { error } = await supabase
+    .from('ranking_results')
+    .update({ is_public: true, share_id: shareId })
+    .eq('id', resultId)
+    .eq('user_id', user.id);
+
+  if (error) return { error: error.message };
+  return { shareId };
+}
+
 export async function deleteResult(resultId: string): Promise<{ error?: string }> {
   if (!isSupabaseConfigured()) return { error: 'Database not configured' };
 
