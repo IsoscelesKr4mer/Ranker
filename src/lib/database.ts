@@ -261,6 +261,52 @@ export async function completeRankingSession(sessionId: string): Promise<{ error
   return {};
 }
 
+export async function getRankingSessionById(sessionId: string): Promise<RankingSession | null> {
+  if (!isSupabaseConfigured()) return null;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('ranking_sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (error || !data) return null;
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    listId: data.list_id,
+    listTitle: data.list_title,
+    status: data.status,
+    comparisonsMade: data.comparisons_made,
+    estimatedTotal: data.estimated_total,
+    sortState: data.sort_state,
+    items: data.items,
+    createdAt: data.created_at,
+    completedAt: data.completed_at,
+  };
+}
+
+export async function deleteRankingSession(sessionId: string): Promise<{ error?: string }> {
+  if (!isSupabaseConfigured()) return { error: 'Database not configured' };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { error } = await supabase
+    .from('ranking_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('user_id', user.id);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function getInProgressSessions(): Promise<RankingSession[]> {
   if (!isSupabaseConfigured()) return [];
 

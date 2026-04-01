@@ -8,6 +8,11 @@ export function useRanking() {
   const [isAnimating, setIsAnimating] = useState(false);
   const animationTimeout = useRef<number | null>(null);
 
+  const resumeRanking = useCallback((savedState: MergeSortState) => {
+    setSortState(savedState);
+    setComparison(getNextComparison(savedState));
+  }, []);
+
   const startRanking = useCallback((items: RankItem[]) => {
     // Shuffle items randomly before starting
     const shuffled = [...items].sort(() => Math.random() - 0.5);
@@ -71,6 +76,7 @@ export function useRanking() {
     isAnimating,
     canUndo,
     startRanking,
+    resumeRanking,
     makeChoice,
     undoChoice,
     removeFromRanking,

@@ -7,10 +7,46 @@ import { useRanking } from '@/hooks/useRanking';
 import { getPresetById } from '@/data/presets';
 import { importLetterboxdList } from '@/lib/letterboxd';
 import { searchMovies } from '@/lib/tmdb';
-import { saveRankingSession, updateRankingSession, completeRankingSession, saveList, getListById } from '@/lib/database';
+import { saveRankingSession, updateRankingSession, completeRankingSession, saveList, getListById, getRankingSessionById } from '@/lib/database';
 import { useAuthStore } from '@/store/authStore';
-import type { RankItem } from '@/types';
-import { Undo2, X, ArrowLeft, Trophy, Search, Play } from 'lucide-react';
+import type { RankItem, MergeSortState } from '@/types';
+import { Undo2, X, ArrowLeft, Trophy, Search, Play, Save } from 'lucide-react';
+
+// ─── Guest session helpers (localStorage) ──────────────────────────
+interface GuestSession {
+  listTitle: string;
+  category: string;
+  source: 'preset' | 'custom' | 'letterboxd';
+  items: RankItem[];
+  sortState: MergeSortState;
+  comparisonsMade: number;
+  savedAt: string;
+  presetId?: string;
+}
+
+function guestSessionKey(presetId?: string, listTitle?: string): string {
+  const id = presetId || (listTitle ? btoa(encodeURIComponent(listTitle)).slice(0, 24) : 'custom');
+  return `ranker_guest_session_${id}`;
+}
+
+function loadGuestSession(presetId?: string, listTitle?: string): GuestSession | null {
+  try {
+    const raw = localStorage.getItem(guestSessionKey(presetId, listTitle));
+    return raw ? (JSON.parse(raw) as GuestSession) : null;
+  } catch { return null; }
+}
+
+function saveGuestSession(session: GuestSession, presetId?: string): void {
+  try {
+    localStorage.setItem(guestSessionKey(presetId, session.listTitle), JSON.stringify(session));
+  } catch { /* storage full or unavailable */ }
+}
+
+function clearGuestSession(presetId?: string, listTitle?: string): void {
+  try {
+    localStorage.removeItem(guestSessionKey(presetId, listTitle));
+  } catch { /* ignore */ }
+}
 
 // Prompt rotation system based on category
 const COMPARISON_PROMPTS: Record<string, string[]> = {
@@ -78,7 +114,7 @@ interface RankingState {
 export default function Ranking() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { presetId } = useParams<{ presetId: string }>();
+  const { presetId, sessionId: resumeSessionId } = useParams<{ presetId?: string; sessionId?: string }>();
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
 
@@ -90,6 +126,7 @@ export default function Ranking() {
     canUndo,
     sortState,
     startRanking,
+    resumeRanking,
     makeChoice,
     undoChoice,
     removeFromRanking,
@@ -100,7 +137,9 @@ export default function Ranking() {
   const [showBackDialog, setShowBackDialog] = useState(false);
   const [selectedCard, setSelectedCard] = useState<'left' | 'right' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [guestSavedSession, setGuestSavedSession] = useState<GuestSession | null>(null);
+  const [isSavingAndExiting, setIsSavingAndExiting] = useState(false);
 
   // Review mode state
   const [reviewMode, setReviewMode] = useState(true);
@@ -145,6 +184,28 @@ export default function Ranking() {
       let title = '';
       let category = 'default';
       let source: 'preset' | 'custom' | 'letterboxd' = 'custom';
+
+      // ── Resume from a saved session (auth users via /rank/:sessionId/resume) ──
+      if (resumeSessionId) {
+        const session = await getRankingSessionById(resumeSessionId);
+        if (session && session.status === 'in_progress') {
+          const newRankingState: RankingState = {
+            listTitle: session.listTitle,
+            category: 'default',
+            items: session.items,
+            source: 'custom',
+          };
+          setRankingState(newRankingState);
+          setCurrentSessionId(resumeSessionId);
+          resumeRanking(session.sortState);
+          setReviewMode(false);
+          setIsLoading(false);
+          return;
+        } else {
+          navigate('/dashboard');
+          return;
+        }
+      }
 
       if (presetId) {
         const preset = getPresetById(presetId);
@@ -223,13 +284,21 @@ export default function Ranking() {
         setRankingState(newRankingState);
         setReviewItems([...items]);
         setReviewMode(true);
+
+        // Check for a guest saved session for this list
+        if (!user) {
+          const saved = loadGuestSession(presetId, title);
+          if (saved) {
+            setGuestSavedSession(saved);
+          }
+        }
       }
       setIsLoading(false);
     };
 
     initializeRanking();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetId, searchParams, location.state, navigate]);
+  }, [resumeSessionId, presetId, searchParams, location.state, navigate]);
 
   // Rotate prompt every 3-4 comparisons
   useEffect(() => {
@@ -242,30 +311,42 @@ export default function Ranking() {
   // Auto-save session after every 5 comparisons
   useEffect(() => {
     const autoSave = async () => {
-      if (
-        user &&
-        sessionId &&
-        sortState &&
-        progress &&
-        progress.comparisons > 0 &&
-        progress.comparisons % 5 === 0
-      ) {
-        await updateRankingSession(sessionId, {
+      if (!sortState || !progress || progress.comparisons === 0 || progress.comparisons % 5 !== 0) return;
+
+      if (user && currentSessionId) {
+        // Authenticated: persist to Supabase
+        await updateRankingSession(currentSessionId, {
           sortState,
           comparisonsMade: progress.comparisons,
         });
+      } else if (!user && rankingState) {
+        // Guest: persist to localStorage
+        saveGuestSession({
+          listTitle: rankingState.listTitle,
+          category: rankingState.category,
+          source: rankingState.source,
+          items: rankingState.items,
+          sortState,
+          comparisonsMade: progress.comparisons,
+          savedAt: new Date().toISOString(),
+          presetId,
+        }, presetId);
       }
     };
 
     autoSave();
-  }, [user, sessionId, sortState, progress]);
+  }, [user, currentSessionId, sortState, progress, rankingState, presetId]);
 
   // Handle completion
   useEffect(() => {
     const handleCompletion = async () => {
       if (result && rankingState) {
-        if (user && sessionId) {
-          await completeRankingSession(sessionId);
+        if (user && currentSessionId) {
+          await completeRankingSession(currentSessionId);
+        }
+        // Clear any guest session for this list on completion
+        if (!user) {
+          clearGuestSession(presetId, rankingState.listTitle);
         }
 
         navigate('/results', {
@@ -274,14 +355,14 @@ export default function Ranking() {
             listTitle: rankingState.listTitle,
             comparisons: progress?.comparisons || 0,
             source: rankingState.source,
-            sessionId,
+            sessionId: currentSessionId,
           },
         });
       }
     };
 
     handleCompletion();
-  }, [result, rankingState, navigate, progress, user, sessionId]);
+  }, [result, rankingState, navigate, progress, user, currentSessionId, presetId]);
 
   const handleCardChoice = useCallback(
     (side: 'left' | 'right') => {
@@ -320,8 +401,28 @@ export default function Ranking() {
     }
   }, [progress, navigate, reviewMode]);
 
+  const handleResumeGuestSession = useCallback(() => {
+    if (!guestSavedSession) return;
+    const newRankingState: RankingState = {
+      listTitle: guestSavedSession.listTitle,
+      category: guestSavedSession.category,
+      items: guestSavedSession.items,
+      source: guestSavedSession.source,
+    };
+    setRankingState(newRankingState);
+    resumeRanking(guestSavedSession.sortState);
+    setReviewMode(false);
+    setGuestSavedSession(null);
+  }, [guestSavedSession, resumeRanking]);
+
   const handleStartFromReview = useCallback(async () => {
     if (reviewItems.length < 2) return;
+
+    // Clear any guest saved session since we're starting fresh
+    if (!user && rankingState) {
+      clearGuestSession(presetId, rankingState.listTitle);
+      setGuestSavedSession(null);
+    }
 
     // Update ranking state with pruned items
     setRankingState(prev => prev ? { ...prev, items: reviewItems } : null);
@@ -339,11 +440,41 @@ export default function Ranking() {
         estimatedTotal: reviewItems.length,
       });
       if ('sessionId' in result) {
-        setSessionId(result.sessionId);
+        setCurrentSessionId(result.sessionId);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewItems, startRanking, user, rankingState]);
+  }, [reviewItems, startRanking, user, rankingState, presetId]);
+
+  const handleSaveAndExit = useCallback(async () => {
+    if (isSavingAndExiting) return;
+    setIsSavingAndExiting(true);
+
+    if (user && currentSessionId && sortState && progress) {
+      await updateRankingSession(currentSessionId, {
+        sortState,
+        comparisonsMade: progress.comparisons,
+      });
+      navigate('/dashboard');
+    } else if (!user && sortState && rankingState && progress) {
+      saveGuestSession({
+        listTitle: rankingState.listTitle,
+        category: rankingState.category,
+        source: rankingState.source,
+        items: rankingState.items,
+        sortState,
+        comparisonsMade: progress.comparisons,
+        savedAt: new Date().toISOString(),
+        presetId,
+      }, presetId);
+      navigate('/');
+    } else {
+      navigate(-1);
+    }
+
+    setIsSavingAndExiting(false);
+    setShowBackDialog(false);
+  }, [isSavingAndExiting, user, currentSessionId, sortState, progress, rankingState, navigate, presetId]);
 
   const handleReviewRemove = useCallback((id: string) => {
     setReviewItems(prev => prev.filter(item => item.id !== id));
@@ -440,6 +571,36 @@ export default function Ranking() {
         <div className="flex-1 flex flex-col items-center pt-8 sm:pt-12">
           <div className="w-full max-w-lg space-y-6">
             {/* Header */}
+            {/* Guest session resume banner */}
+            {guestSavedSession && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-violet-600/10 border border-violet-500/25"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/90">You have saved progress</p>
+                  <p className="text-xs text-white/50 mt-0.5">
+                    {guestSavedSession.comparisonsMade} comparisons made · saved {new Date(guestSavedSession.savedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setGuestSavedSession(null)}
+                    className="px-2.5 py-1.5 rounded-lg text-white/40 hover:text-white/65 text-xs transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    onClick={handleResumeGuestSession}
+                    className="px-3 py-1.5 rounded-lg bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 text-xs font-medium transition-colors"
+                  >
+                    Resume →
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             <div className="text-center space-y-2">
               <h2
                 className="text-2xl sm:text-3xl font-bold text-white tracking-tight"
@@ -587,27 +748,39 @@ export default function Ranking() {
       >
         <div className="space-y-4">
           <p className="text-white/65 text-sm leading-relaxed">
-            You've made {progress?.comparisons || 0} comparisons. Your progress will be lost.
+            You've made {progress?.comparisons || 0} comparisons. Save your progress to continue later, or leave without saving.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-2">
             <Button
-              variant="ghost"
+              variant="primary"
               fullWidth
-              onClick={() => setShowBackDialog(false)}
-              className="text-white/65"
+              onClick={handleSaveAndExit}
+              disabled={isSavingAndExiting}
             >
-              Continue
+              <Save size={15} className="mr-1.5" />
+              {isSavingAndExiting ? 'Saving…' : 'Save & Exit'}
             </Button>
-            <Button
-              variant="danger"
-              fullWidth
-              onClick={() => {
-                setShowBackDialog(false);
-                navigate(-1);
-              }}
-            >
-              Leave
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                fullWidth
+                onClick={() => setShowBackDialog(false)}
+                className="text-white/65"
+              >
+                Keep Ranking
+              </Button>
+              <Button
+                variant="danger"
+                fullWidth
+                onClick={() => {
+                  if (!user && rankingState) clearGuestSession(presetId, rankingState.listTitle);
+                  setShowBackDialog(false);
+                  navigate(-1);
+                }}
+              >
+                Leave
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
@@ -634,7 +807,20 @@ export default function Ranking() {
           </p>
         </div>
 
-        <div className="w-8" />
+        {/* Save & Exit button — visible once comparisons have started */}
+        {progress && progress.comparisons > 0 ? (
+          <button
+            onClick={handleSaveAndExit}
+            disabled={isSavingAndExiting}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/45 hover:text-white/80 hover:bg-white/[0.07] transition-colors text-xs font-medium"
+            title="Save progress and exit"
+          >
+            <Save size={14} />
+            <span className="hidden sm:inline">Save</span>
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
       </div>
 
       {/* Main Content */}

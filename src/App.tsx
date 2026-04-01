@@ -44,6 +44,7 @@ function AppRoutes() {
         <Route path="/ranking/preset/:presetId" element={<Ranking />} />
         <Route path="/ranking/letterboxd" element={<Ranking />} />
         <Route path="/ranking/custom" element={<Ranking />} />
+        <Route path="/rank/:sessionId/resume" element={<Ranking />} />
         <Route path="/results" element={<Results />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/community" element={<Community />} />
