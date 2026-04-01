@@ -5,22 +5,10 @@ interface RankingDisplayProps {
   items: RankItem[];
 }
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05, delayChildren: 0.2 },
-  },
-};
+// Only stagger-animate the first N items — beyond that the delay would be
+// unbearably long (e.g. 60 items × 0.05s = 3s wait for the last row).
+const ANIMATED_COUNT = 12;
 
-const itemVariants = {
-  hidden: { opacity: 0, x: -18 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] },
-  },
-};
 
 export function RankingDisplay({ items }: RankingDisplayProps) {
   const first = items[0];
@@ -260,12 +248,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
 
       {/* ── Remaining rankings — numbered list ── */}
       {rest.length > 0 && (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="pt-1"
-        >
+        <div className="pt-1">
           <p
             className="text-[10px] font-bold tracking-[0.2em] uppercase px-1 mb-3"
             style={{ color: 'rgba(255,255,255,0.22)', fontFamily: 'var(--font-family-display)' }}
@@ -276,51 +259,78 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
             className="rounded-xl overflow-hidden border border-white/[0.055]"
             style={{ background: 'rgba(255,255,255,0.018)' }}
           >
-            {rest.map((item, idx) => (
-              <motion.div
-                key={item.id}
-                variants={itemVariants}
-                className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.045] last:border-0 hover:bg-white/[0.028] transition-colors duration-150 group"
-              >
-                {/* Rank number */}
-                <div className="w-7 text-right flex-shrink-0">
-                  <span
-                    className="text-xs font-bold tabular-nums group-hover:text-white/40 transition-colors"
-                    style={{
-                      color: 'rgba(255,255,255,0.18)',
-                      fontFamily: 'var(--font-family-display)',
-                    }}
-                  >
-                    {String(idx + 4).padStart(2, '0')}
-                  </span>
-                </div>
+            {rest.map((item, idx) => {
+              const rowClass =
+                'flex items-center gap-3 px-4 py-3 border-b border-white/[0.045] last:border-0 hover:bg-white/[0.028] transition-colors duration-150 group';
 
-                {/* Thumbnail — portrait ratio */}
-                {item.imageUrl ? (
-                  <div className="w-9 h-[52px] rounded-md overflow-hidden flex-shrink-0 bg-white/[0.05]">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
+              const rowContent = (
+                <>
+                  {/* Rank number */}
+                  <div className="w-7 text-right flex-shrink-0">
+                    <span
+                      className="text-xs font-bold tabular-nums group-hover:text-white/40 transition-colors"
+                      style={{
+                        color: 'rgba(255,255,255,0.18)',
+                        fontFamily: 'var(--font-family-display)',
+                      }}
+                    >
+                      {String(idx + 4).padStart(2, '0')}
+                    </span>
                   </div>
-                ) : (
-                  <div className="w-9 h-[52px] rounded-md bg-violet-600/10 flex-shrink-0" />
-                )}
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white/82 text-sm truncate leading-tight">
-                    {item.title}
-                  </p>
-                  {item.subtitle && (
-                    <p className="text-xs text-white/32 truncate mt-0.5">{item.subtitle}</p>
+                  {/* Thumbnail — portrait ratio */}
+                  {item.imageUrl ? (
+                    <div className="w-9 h-[52px] rounded-md overflow-hidden flex-shrink-0 bg-white/[0.05]">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-9 h-[52px] rounded-md bg-violet-600/10 flex-shrink-0" />
                   )}
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white/82 text-sm truncate leading-tight">
+                      {item.title}
+                    </p>
+                    {item.subtitle && (
+                      <p className="text-xs text-white/32 truncate mt-0.5">{item.subtitle}</p>
+                    )}
+                  </div>
+                </>
+              );
+
+              // Only animate the first ANIMATED_COUNT items — beyond that the
+              // cumulative stagger delay would make items appear way too late.
+              if (idx < ANIMATED_COUNT) {
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{
+                      duration: 0.28,
+                      delay: 0.2 + idx * 0.04,
+                      ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number],
+                    }}
+                    className={rowClass}
+                  >
+                    {rowContent}
+                  </motion.div>
+                );
+              }
+
+              return (
+                <div key={item.id} className={rowClass}>
+                  {rowContent}
                 </div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );
