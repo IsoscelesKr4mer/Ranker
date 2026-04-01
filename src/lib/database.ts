@@ -3,6 +3,15 @@ import type { RankItem, RankList, RankingSession, MergeSortState, PublicProfile 
 
 // ─── Lists ─────────────────────────────────────────────────────────
 
+const SAVE_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message = 'Request timed out'): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
+
 export async function saveList(params: {
   title: string;
   description?: string;
@@ -32,11 +41,11 @@ export async function saveList(params: {
     cover_image_url: params.coverImageUrl || params.items[0]?.imageUrl,
   };
 
-  const { data: list, error: listError } = await supabase
-    .from('lists')
-    .insert(insertData)
-    .select('id')
-    .single();
+  const { data: list, error: listError } = await withTimeout(
+    supabase.from('lists').insert(insertData).select('id').single(),
+    SAVE_TIMEOUT_MS,
+    'Saving list timed out — please check your connection and try again.',
+  );
 
   if (listError || !list) {
     console.error('saveList error:', listError);
@@ -53,7 +62,11 @@ export async function saveList(params: {
     position: index,
   }));
 
-  const { error: itemsError } = await supabase.from('list_items').insert(items);
+  const { error: itemsError } = await withTimeout(
+    supabase.from('list_items').insert(items),
+    SAVE_TIMEOUT_MS,
+    'Saving list items timed out — please check your connection and try again.',
+  );
   if (itemsError) return { error: itemsError.message };
 
   return { listId: list.id };
@@ -112,19 +125,56 @@ export async function getCommunityLists(): Promise<RankList[]> {
   return data.map(d => dbListToRankList(d, profileMap.get(d.creator_id as string)));
 }
 
+/**
+ * Extracts the Supabase Storage path from a public URL for the list-images bucket.
+ * Returns null if the URL is not a Supabase storage URL (e.g. external API images).
+ */
+function extractStoragePath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = '/list-images/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return url.slice(idx + marker.length);
+}
+
 export async function deleteList(listId: string): Promise<{ error?: string }> {
   if (!isSupabaseConfigured()) return { error: 'Database not configured' };
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
 
-  // Delete list items first (child rows)
+  // Fetch the list + its items so we can clean up uploaded images from storage
+  const { data: listData } = await supabase
+    .from('lists')
+    .select('cover_image_url, list_items(image_url)')
+    .eq('id', listId)
+    .eq('creator_id', user.id)
+    .single();
+
+  if (listData) {
+    // Collect every storage path that lives in our list-images bucket
+    const paths: string[] = [];
+
+    const coverPath = extractStoragePath(listData.cover_image_url as string | null);
+    if (coverPath) paths.push(coverPath);
+
+    const items = (listData.list_items as { image_url: string | null }[]) || [];
+    for (const item of items) {
+      const itemPath = extractStoragePath(item.image_url);
+      if (itemPath) paths.push(itemPath);
+    }
+
+    if (paths.length > 0) {
+      await supabase.storage.from('list-images').remove(paths);
+    }
+  }
+
+  // Delete list items first (child rows), then the list itself
   await supabase
     .from('list_items')
     .delete()
     .eq('list_id', listId);
 
-  // Delete the list itself
   const { error } = await supabase
     .from('lists')
     .delete()
@@ -555,6 +605,64 @@ export async function getUserStats(): Promise<{
 }
 
 
+// ─── Image Cleanup ─────────────────────────────────────────────────
+
+/**
+ * One-time utility: deletes every file in the list-images bucket that is no
+ * longer referenced by any list or list_item row.  Call this once from the
+ * browser console (while logged in) to scrub the orphaned images that
+ * accumulated before the deleteList fix was deployed:
+ *
+ *   import { purgeOrphanedListImages } from '@/lib/database';
+ *   purgeOrphanedListImages().then(console.log);
+ */
+export async function purgeOrphanedListImages(): Promise<{ deleted: number; errors: string[] }> {
+  if (!isSupabaseConfigured()) return { deleted: 0, errors: ['Database not configured'] };
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { deleted: 0, errors: ['Not authenticated'] };
+
+  // 1. List every file the current user owns in the bucket
+  const { data: storageFiles, error: listError } = await supabase.storage
+    .from('list-images')
+    .list(user.id, { limit: 1000 });
+
+  if (listError) return { deleted: 0, errors: [listError.message] };
+  if (!storageFiles || storageFiles.length === 0) return { deleted: 0, errors: [] };
+
+  // 2. Collect all image URLs currently referenced in the DB for this user
+  const [listsRes, itemsRes] = await Promise.all([
+    supabase.from('lists').select('cover_image_url').eq('creator_id', user.id),
+    supabase
+      .from('list_items')
+      .select('image_url, lists!inner(creator_id)')
+      .eq('lists.creator_id', user.id),
+  ]);
+
+  const referencedPaths = new Set<string>();
+  for (const row of listsRes.data || []) {
+    const p = extractStoragePath(row.cover_image_url);
+    if (p) referencedPaths.add(p);
+  }
+  for (const row of (itemsRes.data || []) as { image_url: string | null }[]) {
+    const p = extractStoragePath(row.image_url);
+    if (p) referencedPaths.add(p);
+  }
+
+  // 3. Any file NOT referenced is orphaned — delete it
+  const orphans = storageFiles
+    .map(f => `${user.id}/${f.name}`)
+    .filter(path => !referencedPaths.has(path));
+
+  if (orphans.length === 0) return { deleted: 0, errors: [] };
+
+  const { error: removeError } = await supabase.storage.from('list-images').remove(orphans);
+  if (removeError) return { deleted: 0, errors: [removeError.message] };
+
+  return { deleted: orphans.length, errors: [] };
+}
+
+
 // ─── Image Upload ──────────────────────────────────────────────────
 
 export async function uploadListImage(file: File): Promise<{ url: string } | { error: string }> {
@@ -697,27 +805,4 @@ export async function getPublicUserResults(userId: string): Promise<{
   id: string;
   listTitle: string;
   results: RankItem[];
-  comparisonsMade: number;
-  shareId?: string;
-  createdAt: string;
-}[]> {
-  if (!isSupabaseConfigured()) return [];
-
-  const { data, error } = await supabase
-    .from('ranking_results')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('is_public', true)
-    .order('created_at', { ascending: false });
-
-  if (error || !data) return [];
-
-  return data.map((row) => ({
-    id: row.id,
-    listTitle: row.list_title,
-    results: row.results as RankItem[],
-    comparisonsMade: row.comparisons_made,
-    shareId: row.share_id || undefined,
-    createdAt: row.created_at,
-  }));
-}
+  co

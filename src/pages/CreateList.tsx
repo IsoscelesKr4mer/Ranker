@@ -397,10 +397,11 @@ export default function CreateList() {
       try {
         const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
         const result = await saveList({ title: listTitle, category: selectedCategory, source: 'web', items, isCommunity, isPublic: true, tags });
-        if ('error' in result) { setSaveError(result.error); setIsSaving(false); return; }
+        if ('error' in result) { setSaveError(result.error); return; }
         navigate('/ranking/custom', { state: { listId: result.listId, listTitle, category: selectedCategory, items } });
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Failed to save list');
+      } finally {
         setIsSaving(false);
       }
     } else {
