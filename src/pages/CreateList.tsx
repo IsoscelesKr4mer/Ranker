@@ -7,7 +7,7 @@ import {
   List, ArrowRight, Calendar, BookMarked,
 } from 'lucide-react';
 import { PageLayout } from '@/components/layout';
-import { searchMovies, searchTV, discoverMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
+import { searchMovies, searchTV, discoverMovies, searchPerson, getPersonMovies, tmdbToRankItem, tmdbTVToRankItem } from '@/lib/tmdb';
 import { searchGames, igdbToRankItem } from '@/lib/igdb';
 import { searchMusic, deezerToRankItem, type MusicSearchType } from '@/lib/deezer';
 import { searchBooks, googleBookToRankItem } from '@/lib/googlebooks';
@@ -43,6 +43,9 @@ export default function CreateList() {
   const [listTitle, setListTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Movies');
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>('track');
+  const [movieSearchType, setMovieSearchType] = useState<'title' | 'actor' | 'director'>('title');
+  const [personResults, setPersonResults] = useState<any[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<{ id: number; name: string; profilePath: string | null } | null>(null);
   const [isCommunity, setIsCommunity] = useState(false);
   const [tagsInput, setTagsInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -197,6 +200,25 @@ export default function CreateList() {
       return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
     }
 
+    // Actor / Director person search
+    if (selectedCategory === 'Movies' && (movieSearchType === 'actor' || movieSearchType === 'director') && !selectedPerson) {
+      const performPersonSearch = async () => {
+        setIsSearching(true);
+        try {
+          const { people } = await searchPerson(searchQuery);
+          setPersonResults(people || []);
+          setSearchResults([]);
+        } catch (error) {
+          console.error('Person search failed:', error);
+          setPersonResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      };
+      searchTimeoutRef.current = setTimeout(performPersonSearch, 300);
+      return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+    }
+
     // Normal text search
     const performSearch = async () => {
       setIsSearching(true);
@@ -227,7 +249,7 @@ export default function CreateList() {
 
     searchTimeoutRef.current = setTimeout(performSearch, 300);
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, [searchQuery, yearFilter, discoverSortBy, selectedCategory, musicSearchType]);
+  }, [searchQuery, yearFilter, discoverSortBy, selectedCategory, musicSearchType, movieSearchType, selectedPerson]);
 
   const loadMoreDiscover = useCallback(async () => {
     if (discoverPage >= discoverTotalPages || isLoadingMore) return;
@@ -249,6 +271,22 @@ export default function CreateList() {
       setIsLoadingMore(false);
     }
   }, [discoverPage, discoverTotalPages, yearFilter, discoverSortBy, isLoadingMore]);
+
+  const handleSelectPerson = useCallback(async (person: any) => {
+    setSelectedPerson({ id: person.id, name: person.name, profilePath: person.profile_path });
+    setPersonResults([]);
+    setSearchQuery('');
+    setIsSearching(true);
+    try {
+      const { movies } = await getPersonMovies(person.id, movieSearchType === 'director' ? 'director' : 'cast');
+      setSearchResults(movies || []);
+    } catch (error) {
+      console.error('Person movies failed:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [movieSearchType]);
 
   // ── Items state ───────────────────────────────────────────────────────────
   const [items, setItems] = useState<RankItem[]>([]);
@@ -438,6 +476,8 @@ export default function CreateList() {
     : selectedCategory === 'Music'
       ? musicSearchType === 'album' ? 'Search albums...' : musicSearchType === 'artist' ? 'Search artists...' : 'Search songs...'
     : selectedCategory === 'Books' ? 'Search books...'
+    : selectedCategory === 'Movies' && movieSearchType === 'actor' ? 'Search actors...'
+    : selectedCategory === 'Movies' && movieSearchType === 'director' ? 'Search directors...'
     : 'Search movies...';
 
   // ── Sidebar / tray shared content ─────────────────────────────────────────
@@ -652,7 +692,7 @@ export default function CreateList() {
               return (
                 <button
                   key={cat.id}
-                  onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); setYearFilter(''); setSearchResults([]); }}
+                  onClick={() => { setSelectedCategory(cat.id); setSearchQuery(''); setYearFilter(''); setSearchResults([]); setPersonResults([]); setSelectedPerson(null); setMovieSearchType('title'); }}
                   className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 ${
                     isActive
                       ? 'bg-violet-600 text-white shadow-sm shadow-violet-600/30'
@@ -693,8 +733,54 @@ export default function CreateList() {
             </div>
           )}
 
+          {/* Movies sub-type picker */}
+          {selectedCategory === 'Movies' && (
+            <div className="flex gap-1.5">
+              {(['title', 'actor', 'director'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => {
+                    setMovieSearchType(type);
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setPersonResults([]);
+                    setSelectedPerson(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    movieSearchType === type
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-white/[0.05] text-white/45 hover:text-white/70 hover:bg-white/[0.08] border border-white/[0.07]'
+                  }`}
+                >
+                  {type === 'title' ? 'Title' : type === 'actor' ? 'Actor' : 'Director'}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Search bar */}
           {isSearchableCategory ? (
+            <div className="space-y-2">
+            {/* Selected person chip */}
+            {selectedPerson && (
+              <div className="flex items-center gap-2">
+                {selectedPerson.profilePath && (
+                  <img
+                    src={`https://image.tmdb.org/t/p/w185${selectedPerson.profilePath}`}
+                    alt={selectedPerson.name}
+                    className="w-7 h-7 rounded-full object-cover"
+                  />
+                )}
+                <span className="text-sm font-semibold text-white/90">{selectedPerson.name}</span>
+                <button
+                  onClick={() => { setSelectedPerson(null); setSearchResults([]); setSearchQuery(''); }}
+                  className="ml-auto text-white/30 hover:text-white/70 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {!selectedPerson && (
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
               {isSearching && (
@@ -720,6 +806,8 @@ export default function CreateList() {
                 style={{ fontSize: '16px' }}
                 className="w-full pl-12 pr-12 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.10] text-white/90 placeholder:text-white/25 focus:outline-none focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/12 hover:border-white/[0.16] transition-all"
               />
+            </div>
+            )}
             </div>
           ) : (
             /* Manual add as primary for Custom/Food */
@@ -818,9 +906,47 @@ export default function CreateList() {
             </div>
           )}
 
+          {/* Person search results */}
+          <AnimatePresence mode="wait">
+            {personResults.length > 0 && (
+              <motion.div
+                key="person-results"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.15 }}
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2.5"
+              >
+                {personResults.slice(0, 6).map(person => (
+                  <button
+                    key={person.id}
+                    onClick={() => handleSelectPerson(person)}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.09] hover:border-white/[0.15] transition-all text-left"
+                  >
+                    {person.profile_path ? (
+                      <img
+                        src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
+                        alt={person.name}
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center flex-shrink-0">
+                        <span className="text-white/30 text-lg font-bold">{person.name[0]}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white/90 truncate">{person.name}</p>
+                      <p className="text-xs text-white/35 truncate">{person.known_for_department}</p>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Search results grid */}
           <AnimatePresence mode="wait">
-            {isSearchableCategory && (searchQuery || (yearFilter.length === 4 && selectedCategory === 'Movies')) && (
+            {isSearchableCategory && (searchQuery || (yearFilter.length === 4 && selectedCategory === 'Movies') || selectedPerson) && (
               <motion.div
                 key="results"
                 initial={{ opacity: 0, y: 6 }}
@@ -927,7 +1053,7 @@ export default function CreateList() {
           )}
 
           {/* Empty search state for searchable categories */}
-          {isSearchableCategory && !searchQuery && !(yearFilter.length === 4 && selectedCategory === 'Movies') && (
+          {isSearchableCategory && !searchQuery && !selectedPerson && !(yearFilter.length === 4 && selectedCategory === 'Movies') && (
             <div className="py-10 text-center space-y-2">
               <Search className="w-8 h-8 text-white/10 mx-auto" />
               <p className="text-sm text-white/25">Search above to find {selectedCategory === 'TV' ? 'TV shows' : selectedCategory.toLowerCase()} to add{selectedCategory === 'Movies' ? ', or enter a year below to browse by release date' : ''}</p>
@@ -1115,4 +1241,28 @@ export default function CreateList() {
             <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-bold ${
               items.length >= 3 ? 'bg-violet-600/30 text-violet-300' : 'bg-white/[0.08] text-white/40'
             }`}>{items.length}</span>
-          </s
+          </span>
+          <motion.div animate={{ rotate: isTrayOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown className="w-4 h-4" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {isTrayOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-white/[0.07]"
+            >
+              <div className="p-5">
+                <ItemsPanel isMobile />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+    </PageLayout>
+  );
+}

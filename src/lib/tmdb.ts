@@ -56,6 +56,36 @@ export async function discoverMovies(options: {
   return { movies: data.results, totalPages: data.total_pages };
 }
 
+interface TMDbPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string;
+  known_for: TMDbMovie[];
+}
+
+export async function searchPerson(query: string): Promise<{ people: TMDbPerson[] }> {
+  const res = await fetch(
+    `${BASE_URL}/search/person?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`
+  );
+  const data = await res.json();
+  return { people: data.results || [] };
+}
+
+export async function getPersonMovies(personId: number, role: 'cast' | 'director'): Promise<{ movies: TMDbMovie[] }> {
+  const res = await fetch(`${BASE_URL}/person/${personId}/movie_credits?api_key=${TMDB_API_KEY}`);
+  const data = await res.json();
+  if (role === 'cast') {
+    const movies = [...(data.cast || [])].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    return { movies };
+  } else {
+    const movies = (data.crew || [])
+      .filter((m: any) => m.job === 'Director')
+      .sort((a: any, b: any) => (b.release_date || '').localeCompare(a.release_date || ''));
+    return { movies };
+  }
+}
+
 export async function getMovieDetails(tmdbId: number): Promise<TMDbMovie | null> {
   try {
     const res = await fetch(`${BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}`);
