@@ -41,17 +41,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const results = (data.items || []).map((item: any) => {
       const info = item.volumeInfo || {};
 
-      // Prefer the largest available thumbnail; upgrade http → https
-      const rawThumb =
-        info.imageLinks?.extraLarge ||
-        info.imageLinks?.large ||
-        info.imageLinks?.medium ||
-        info.imageLinks?.thumbnail ||
-        info.imageLinks?.smallThumbnail ||
-        null;
-      const imageUrl = rawThumb
-        ? rawThumb.replace(/^http:/, 'https:').replace('&edge=curl', '')
-        : null;
+      // Extract ISBN-13 (preferred) or ISBN-10 for Open Library cover
+      const identifiers = info.industryIdentifiers || [];
+      const isbn13 = identifiers.find((id: any) => id.type === 'ISBN_13')?.identifier;
+      const isbn10 = identifiers.find((id: any) => id.type === 'ISBN_10')?.identifier;
+      const isbn = isbn13 || isbn10 || null;
+
+      // Use Open Library covers (high-res) when ISBN available, fall back to Google Books thumbnail
+      let imageUrl: string | null = null;
+      if (isbn) {
+        imageUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+      } else {
+        const rawThumb =
+          info.imageLinks?.extraLarge ||
+          info.imageLinks?.large ||
+          info.imageLinks?.medium ||
+          info.imageLinks?.thumbnail ||
+          info.imageLinks?.smallThumbnail ||
+          null;
+        imageUrl = rawThumb
+          ? rawThumb.replace(/^http:/, 'https:').replace('&edge=curl', '')
+          : null;
+      }
 
       // Published year
       const year = info.publishedDate ? info.publishedDate.slice(0, 4) : null;
