@@ -927,13 +927,18 @@ export default function Ranking() {
                 onClick={() => handleCardChoice('left')}
                 disabled={isAnimating}
                 custom={lastChosenSideRef}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1, transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] } }}
-                exit={(ref: typeof lastChosenSideRef) => ({
-                  opacity: 0,
-                  scale: ref.current === 'left' ? 1.05 : 0.93,
-                  transition: { duration: 0.12, ease: 'easeIn' },
-                })}
+                variants={{
+                  enter: { opacity: 0, scale: 0.96 },
+                  show: { opacity: 1, scale: 1, transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] } },
+                  exit: (ref: typeof lastChosenSideRef) => ({
+                    opacity: 0,
+                    scale: ref.current === 'left' ? 1.05 : 0.93,
+                    transition: { duration: 0.12, ease: 'easeIn' },
+                  }),
+                }}
+                initial="enter"
+                animate="show"
+                exit="exit"
                 className={`absolute inset-0 group ${isAnimating ? 'cursor-default' : 'cursor-pointer'}`}
                 whileHover={!isAnimating ? { scale: 1.03 } : {}}
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
@@ -983,13 +988,18 @@ export default function Ranking() {
                 onClick={() => handleCardChoice('right')}
                 disabled={isAnimating}
                 custom={lastChosenSideRef}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1, transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] } }}
-                exit={(ref: typeof lastChosenSideRef) => ({
-                  opacity: 0,
-                  scale: ref.current === 'right' ? 1.05 : 0.93,
-                  transition: { duration: 0.12, ease: 'easeIn' },
-                })}
+                variants={{
+                  enter: { opacity: 0, scale: 0.96 },
+                  show: { opacity: 1, scale: 1, transition: { duration: 0.16, ease: [0.16, 1, 0.3, 1] } },
+                  exit: (ref: typeof lastChosenSideRef) => ({
+                    opacity: 0,
+                    scale: ref.current === 'right' ? 1.05 : 0.93,
+                    transition: { duration: 0.12, ease: 'easeIn' },
+                  }),
+                }}
+                initial="enter"
+                animate="show"
+                exit="exit"
                 className={`absolute inset-0 group ${isAnimating ? 'cursor-default' : 'cursor-pointer'}`}
                 whileHover={!isAnimating ? { scale: 1.03 } : {}}
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
