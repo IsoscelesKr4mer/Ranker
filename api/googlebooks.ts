@@ -9,23 +9,14 @@ function normalizeTitle(title: string): string {
     .replace(/\(.*?\)/g, '')                       // remove parentheticals "(Movie Tie-In)"
     .replace(/\[.*?\]/g, '')                       // remove brackets "[Large Print]"
     .replace(/:\s*.*/g, '')                        // strip subtitle after colon
-    .replace(/\b(edition|reprint|anniversary|illustrated|deluxe|enhanced|abridged|unabridged|vol\.?\s*\d*|volume\s*\d*)\b/gi, '')
+    .replace(/\b(edition|reprint|anniversary|illustrated|deluxe|enhanced|abridged|unabridged|vol\.?\s*\d*|volume\s*\d*|book\s*\d+|paperback|hardcover|mass\s*market)\b/gi, '')
     .replace(/[^a-z0-9\s]/g, '')                   // strip punctuation
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-interface BookResult {
-  id: string;
-  title: string;
-  author: string | null;
-  imageUrl: string | null;
-  year: string | null;
-  description: string | null;
-  pageCount: number | null;
-  categories: string[];
-  averageRating: number | null;
-}
+/** Junk title patterns — box sets, study guides, merchandise, companions, etc. */
+const JUNK_PATTERNS = /\b(sparknotes|cliffsnotes|cliff'?s?\s*notes|study\s*guide|summary\s*(and|&)?\s*analysis|analysis\s*of|workbook|coloring\s*book|activity\s*book|quiz\s*book|trivia|companion\s*guide|reader'?s?\s*guide|teacher'?s?\s*guide|lesson\s*plan|box\s*set|boxed\s*set|book\s*set|collection\s*set|pocket\s*potters|unofficial|paper\s*craft|post\s*box|library\s*box|journal|notebook|calendar|diary|poster\s*book|pop-?up|sticker|cookbook|recipe|lego|mini\s*fig|magnets|bookmark)/i;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { q, type = 'title', limit = '20', startIndex = '0' } = req.query;
@@ -41,8 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const start = parseInt(startIndex as string) || 0;
   const requestedLimit = Math.min(parseInt(limit as string) || 20, 40);
 
-  // Over-fetch so we still have enough results after dedup/filtering
-  const fetchLimit = Math.min(requestedLimit + 15, 40);
+  // Over-fetch so we still have enough after dedup/filtering
+  const fetchLimit = 40;
 
   const fetchBooks = async (queryStr: string, maxResults: number, offset: number) => {
     const response = await fetch(
@@ -65,6 +56,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ── Map raw items ────────────────────────────────────────────────────
+    interface BookResult {
+      id: string;
+      title: string;
+      author: string | null;
+      imageUrl: string | null;
+      fallbackImageUrl: string | null;
+      year: string | null;
+      description: string | null;
+      pageCount: number | null;
+      categories: string[];
+      averageRating: number | null;
+    }
+
     const rawResults: BookResult[] = (data.items || []).map((item: any) => {
       const info = item.volumeInfo || {};
 
@@ -74,22 +78,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const isbn10 = identifiers.find((id: any) => id.type === 'ISBN_10')?.identifier;
       const isbn = isbn13 || isbn10 || null;
 
-      // Use Open Library covers (high-res) when ISBN available, fall back to Google Books thumbnail
-      let imageUrl: string | null = null;
-      if (isbn) {
-        imageUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-      } else {
-        const rawThumb =
-          info.imageLinks?.extraLarge ||
-          info.imageLinks?.large ||
-          info.imageLinks?.medium ||
-          info.imageLinks?.thumbnail ||
-          info.imageLinks?.smallThumbnail ||
-          null;
-        imageUrl = rawThumb
-          ? rawThumb.replace(/^http:/, 'https:').replace('&edge=curl', '')
-          : null;
-      }
+      // Google Books thumbnail (always available if the book has images) — use zoom=2 for better quality
+      const rawThumb =
+        info.imageLinks?.thumbnail ||
+        info.imageLinks?.smallThumbnail ||
+        null;
+      const googleImageUrl = rawThumb
+        ? rawThumb
+            .replace(/^http:/, 'https:')
+            .replace('&edge=curl', '')
+            .replace(/zoom=\d/, 'zoom=2')
+        : null;
+
+      // Primary: Open Library high-res cover (only if we have a real ISBN-13)
+      // Fallback: Google Books thumbnail at zoom=2
+      const imageUrl = isbn ? `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg` : googleImageUrl;
+      const fallbackImageUrl = isbn ? googleImageUrl : null;
 
       const year = info.publishedDate ? info.publishedDate.slice(0, 4) : null;
       const author = info.authors?.[0] || null;
@@ -99,6 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         title: info.title || 'Unknown Title',
         author,
         imageUrl,
+        fallbackImageUrl,
         year,
         description: info.description || null,
         pageCount: info.pageCount || null,
@@ -109,30 +114,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // ── Filter junk ──────────────────────────────────────────────────────
     const filtered = rawResults.filter(book => {
-      const t = book.title.toLowerCase();
-      // Drop study guides, summaries, companion books, workbooks, coloring books
-      if (/\b(sparknotes|cliffsnotes|study guide|summary|analysis|workbook|coloring|activity book|quiz book|trivia|companion guide|reader'?s? guide|teacher'?s? guide|lesson plan)\b/i.test(book.title)) return false;
-      // Drop books with no title match for title searches (sanity check)
+      // Must have a title
+      if (!book.title || book.title === 'Unknown Title') return false;
+
+      // Must have an author
+      if (!book.author) return false;
+
+      // Must have some kind of image
+      if (!book.imageUrl && !book.fallbackImageUrl) return false;
+
+      // Drop junk titles
+      if (JUNK_PATTERNS.test(book.title)) return false;
+
+      // For title searches, at least one query word should appear in the title
       if (type === 'title' && q.length > 3) {
         const queryWords = (q as string).toLowerCase().split(/\s+/).filter(w => w.length > 2);
-        const titleLower = t;
-        const matched = queryWords.some(w => titleLower.includes(w));
-        if (!matched) return false;
+        const titleLower = book.title.toLowerCase();
+        if (!queryWords.some(w => titleLower.includes(w))) return false;
       }
+
       return true;
     });
 
     // ── Deduplicate by normalised title + author ─────────────────────────
     const seen = new Map<string, BookResult>();
     for (const book of filtered) {
-      const key = `${normalizeTitle(book.title)}|${(book.author || '').toLowerCase().trim()}`;
+      const normTitle = normalizeTitle(book.title);
+      const normAuthor = (book.author || '').toLowerCase().replace(/[^a-z\s]/g, '').trim();
+      const key = `${normTitle}|${normAuthor}`;
+
       const existing = seen.get(key);
       if (!existing) {
         seen.set(key, book);
       } else {
-        // Keep the one with an image, or more metadata
+        // Keep the one with better metadata
         const score = (b: BookResult) =>
           (b.imageUrl ? 10 : 0) +
+          (b.fallbackImageUrl ? 5 : 0) +
           (b.description ? 3 : 0) +
           (b.pageCount ? 2 : 0) +
           (b.year ? 1 : 0);

@@ -944,7 +944,22 @@ export default function Ranking() {
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
               >
                 {comparison.left.imageUrl ? (
-                  <img src={comparison.left.imageUrl} alt={comparison.left.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" />
+                  <img
+                    src={comparison.left.imageUrl}
+                    alt={comparison.left.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="eager"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      const fb = comparison.left.metadata?.fallbackImageUrl as string | undefined;
+                      if (fb && img.src !== fb) { img.src = fb; }
+                    }}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      const fb = comparison.left.metadata?.fallbackImageUrl as string | undefined;
+                      if (img.naturalWidth <= 1 && fb && img.src !== fb) { img.src = fb; }
+                    }}
+                  />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-800/40 via-violet-900/30 to-[#06060e]" />
                 )}
@@ -1005,7 +1020,22 @@ export default function Ranking() {
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
               >
                 {comparison.right.imageUrl ? (
-                  <img src={comparison.right.imageUrl} alt={comparison.right.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" />
+                  <img
+                    src={comparison.right.imageUrl}
+                    alt={comparison.right.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="eager"
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      const fb = comparison.right.metadata?.fallbackImageUrl as string | undefined;
+                      if (fb && img.src !== fb) { img.src = fb; }
+                    }}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      const fb = comparison.right.metadata?.fallbackImageUrl as string | undefined;
+                      if (img.naturalWidth <= 1 && fb && img.src !== fb) { img.src = fb; }
+                    }}
+                  />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-800/40 via-violet-900/30 to-[#06060e]" />
                 )}
@@ -1063,11 +1093,4 @@ export default function Ranking() {
           <ProgressBar
             comparisons={progress.comparisons}
             estimatedTotal={progress.estimatedTotal}
-            progress={progress.progress}
-          />
-        </div>
-      )}
-
-    </div>
-  );
-}
+            progress={progress.p
