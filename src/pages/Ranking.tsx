@@ -944,7 +944,7 @@ export default function Ranking() {
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
               >
                 {comparison.left.imageUrl ? (
-                  <img src={comparison.left.imageUrl} alt={comparison.left.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" onError={(e) => { const fb = comparison.left.metadata?.fallbackImageUrl as string | undefined; if (fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }} onLoad={(e) => { const fb = comparison.left.metadata?.fallbackImageUrl as string | undefined; if (e.currentTarget.naturalWidth <= 1 && fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }} />
+                  <img src={comparison.left.imageUrl} alt={comparison.left.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-800/40 via-violet-900/30 to-[#06060e]" />
                 )}
@@ -1005,7 +1005,7 @@ export default function Ranking() {
                 whileTap={!isAnimating ? { scale: 0.97 } : {}}
               >
                 {comparison.right.imageUrl ? (
-                  <img src={comparison.right.imageUrl} alt={comparison.right.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" onError={(e) => { const fb = comparison.right.metadata?.fallbackImageUrl as string | undefined; if (fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }} onLoad={(e) => { const fb = comparison.right.metadata?.fallbackImageUrl as string | undefined; if (e.currentTarget.naturalWidth <= 1 && fb && e.currentTarget.src !== fb) e.currentTarget.src = fb; }} />
+                  <img src={comparison.right.imageUrl} alt={comparison.right.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-800/40 via-violet-900/30 to-[#06060e]" />
                 )}

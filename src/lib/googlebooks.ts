@@ -7,7 +7,6 @@ export interface GoogleBookResult {
   title: string;
   author: string | null;
   imageUrl: string | null;
-  fallbackImageUrl: string | null;
   year: string | null;
   description: string | null;
   pageCount: number | null;
@@ -49,7 +48,6 @@ export function googleBookToRankItem(book: GoogleBookResult): RankItem {
       pageCount: book.pageCount,
       categories: book.categories,
       averageRating: book.averageRating,
-      fallbackImageUrl: book.fallbackImageUrl,
     },
   };
 }

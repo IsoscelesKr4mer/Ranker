@@ -1178,25 +1178,6 @@ export default function CreateList() {
                                 alt={displayTitle}
                                 className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                                 loading="lazy"
-                                onError={(e) => {
-                                  const img = e.currentTarget;
-                                  // For books: fall back to Google Books thumbnail if Open Library fails
-                                  const fallback = isBook && result.fallbackImageUrl;
-                                  if (fallback && img.src !== result.fallbackImageUrl) {
-                                    img.src = result.fallbackImageUrl;
-                                  } else {
-                                    // Hide broken image entirely
-                                    img.style.display = 'none';
-                                  }
-                                }}
-                                onLoad={(e) => {
-                                  const img = e.currentTarget;
-                                  // Open Library returns a 1x1 transparent gif when no cover exists
-                                  // Detect it and swap to fallback
-                                  if (isBook && img.naturalWidth <= 1 && img.naturalHeight <= 1 && result.fallbackImageUrl && img.src !== result.fallbackImageUrl) {
-                                    img.src = result.fallbackImageUrl;
-                                  }
-                                }}
                               />
                             ) : (
                               <div className="w-full h-full bg-white/[0.05] flex items-center justify-center">
