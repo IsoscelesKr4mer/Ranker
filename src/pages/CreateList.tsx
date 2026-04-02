@@ -1157,7 +1157,7 @@ export default function CreateList() {
                       const displayTitle = isMusic ? result.title : isGame ? result.name : (result.title || result.name);
                       const displaySub = isMusic ? result.artist
                         : isGame ? result.releaseDate
-                        : isBook ? result.author
+                        : isBook ? [result.author, result.year].filter(Boolean).join(' · ')
                         : (result.release_date || result.first_air_date)?.slice(0, 4);
                       const imageUrl = isMusic ? result.imageUrl
                         : isGame ? result.cover
