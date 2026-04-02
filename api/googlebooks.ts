@@ -1,32 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY || '';
-
 /**
- * Aggressively normalise a title for dedup.
- * "Harry Potter and the Philosopher's Stone - Gryffindor Edition" → "harry potter and the philosophers stone"
+ * Book search API — uses Open Library Search for discovery (one result per work,
+ * high-quality covers) with Google Books as a fallback.
  */
-function normalizeTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/\(.*?\)/g, '')                       // "(Movie Tie-In)", "(Book 1)", etc.
-    .replace(/\[.*?\]/g, '')                       // "[Illustrated Edition]"
-    .replace(/\s*[-–—]\s*.*/g, '')                 // strip everything after dash
-    .replace(/:\s*.*/g, '')                        // strip subtitle after colon
-    .replace(/\s+by\s+.*/i, '')                    // "...by J.K. Rowling" → strip author from title
-    .replace(/\b(a|the|an)\s+/g, '')               // drop articles for looser matching
-    .replace(/\b(edition|reprint|anniversary|illustrated|deluxe|enhanced|abridged|unabridged|vol\.?\s*\d*|volume\s*\d*|book\s*\d+|paperback|hardcover|hardback|mass\s*market|large\s*print|ebook|e-book|audio|audiobook|graphic\s*novel|special|collector'?s?|slipcase|omnibus|complete|uncut)\b/gi, '')
-    .replace(/['']/g, '')                          // smart quotes
-    .replace(/[^a-z0-9\s]/g, '')                   // strip punctuation
-    .replace(/\s+/g, ' ')
-    .trim();
+
+/** Junk patterns to filter from Open Library results */
+const JUNK_PATTERNS = /\b(sparknotes|cliffsnotes|study\s*guide|reading\s*guide|teaching\s*guide|teaching\s*discussion|summary\s*(and|&)?\s*analysis|workbook|coloring|activity\s*book|activity\s*guide|quiz\s*book|trivia|companion\s*guide|box\s*set|boxed\s*set|book\s*set|books?\s*1\s*[-–]\s*\d|volumes?\s*1\s*[-–]\s*\d|complete\s*series|series\)\s*1|unofficial|paper\s*craft|poster\s*book|postcard\s*book|postcard\s*set|pop-?up|sticker|lego|magnets|bookmark|trading\s*card|card\s*game|board\s*game|screenplay|behind\s*the\s*scenes|making\s*of|vault|archive|atlas|encyclopedia|encyclopaedia|dictionary|concordance|handbook|visual\s*guide|colouring|puzzle|maze|paper\s*toy|advent\s*calendar|playbill|a\s*history|biography|interview\s*with|conversations?\s*with|graphic\s*novel\s*edition|teacher'?s?\s*guide|lesson\s*plan|sheet\s*music|themes?\s*from|wonders\s*of\s*the\s*world)\b/i;
+
+/** Drop non-Latin script titles */
+function isLatinTitle(title: string): boolean {
+  return !/[^\u0000-\u024F\u1E00-\u1EFF]/.test(title);
 }
-
-/** Things that are clearly NOT individual books */
-const JUNK_PATTERNS = /\b(sparknotes|cliffsnotes|cliff'?s?\s*notes|study\s*guide|reading\s*guide|summary\s*(and|&)?\s*analysis|analysis\s*of|workbook|coloring\s*book|activity\s*book|quiz\s*book|trivia|companion\s*guide|reader'?s?\s*guide|teacher'?s?\s*guide|lesson\s*plan|box\s*set|boxed\s*set|book\s*set|collection\s*set|books?\s*1\s*[-–]\s*\d|volumes?\s*1\s*[-–]\s*\d|complete\s*series|complete\s*collection|pocket\s*potters|unofficial|paper\s*craft|post\s*box|library\s*box|journal|notebook|diary|poster\s*book|pop-?up|sticker|cookbook|recipe|lego|mini\s*fig|magnets|bookmark|trading\s*card|card\s*game|board\s*game|film\s*guide|movie\s*guide|screenplay|screen\s*play|behind\s*the\s*scenes|making\s*of|wizarding\s*world|vault|archive|atlas|encyclopedia|encyclopaedia|dictionary|concordance|a\s*to\s*z|a-z|handbook|field\s*guide|character\s*guide|visual\s*guide|colouring|dot-?to-?dot|puzzle|maze|craft|paper\s*toy|advent\s*calendar|christmas\s*at|hogwarts\s*library|tales\s*of\s*beedle|quidditch\s*through|fantastic\s*beasts\s*and\s*where\s*to\s*find|playbill|a\s*history|biography|interview\s*with|conversations?\s*with|an\s*interview|unauthorized)\b/i;
-
-/** Extra patterns specifically for title-only junk (not combined with author) */
-const JUNK_TITLE_EXACT = /^(harry potter|[a-z\s]{1,20})$/i; // bare title with no subtitle = usually a box set
 
 interface BookResult {
   id: string;
@@ -47,125 +32,87 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing q parameter' });
   }
 
-  if (!GOOGLE_BOOKS_API_KEY) {
-    return res.status(500).json({ error: 'Google Books API key not configured' });
-  }
-
-  const start = parseInt(startIndex as string) || 0;
   const requestedLimit = Math.min(parseInt(limit as string) || 20, 40);
-
-  const fetchBooks = async (queryStr: string, maxResults: number, offset: number) => {
-    const response = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(queryStr)}&maxResults=${maxResults}&startIndex=${offset}&printType=books&langRestrict=en&orderBy=relevance&key=${GOOGLE_BOOKS_API_KEY}`,
-      { headers: { 'Accept': 'application/json' } }
-    );
-    if (!response.ok) throw new Error(`Google Books API error: ${response.status}`);
-    return response.json();
-  };
+  const start = parseInt(startIndex as string) || 0;
+  // Open Library uses 'offset' and 'limit'
+  const fetchLimit = Math.min(requestedLimit + 10, 40); // over-fetch for filtering
 
   try {
-    let data: any;
+    // ── Build Open Library search URL ────────────────────────────────────
+    let searchUrl: string;
     if (type === 'author') {
-      data = await fetchBooks(`inauthor:${q}`, 40, start);
-      if (start === 0 && (!data.items || data.items.length === 0)) {
-        data = await fetchBooks(q as string, 40, 0);
-      }
+      searchUrl = `https://openlibrary.org/search.json?author=${encodeURIComponent(q)}&offset=${start}&limit=${fetchLimit}&sort=rating&language=eng&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,subject,edition_count,ratings_average`;
     } else {
-      data = await fetchBooks(`intitle:${q}`, 40, start);
+      searchUrl = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&offset=${start}&limit=${fetchLimit}&sort=rating&language=eng&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,subject,edition_count,ratings_average`;
     }
 
-    // ── Map raw items ────────────────────────────────────────────────────
-    const rawResults: BookResult[] = (data.items || []).map((item: any) => {
-      const info = item.volumeInfo || {};
+    const response = await fetch(searchUrl, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'RankerApp/1.0 (ranking app)' },
+    });
+    if (!response.ok) throw new Error(`Open Library API error: ${response.status}`);
+    const data = await response.json();
 
-      // Use Google Books thumbnail directly — zoom=1 is most reliable
-      const rawThumb =
-        info.imageLinks?.thumbnail ||
-        info.imageLinks?.smallThumbnail ||
-        null;
-      const imageUrl = rawThumb
-        ? rawThumb.replace(/^http:/, 'https:').replace('&edge=curl', '')
-        : null;
+    // ── Map and filter results ───────────────────────────────────────────
+    const results: BookResult[] = [];
+    const seenTitles = new Set<string>();
 
-      const year = info.publishedDate ? info.publishedDate.slice(0, 4) : null;
-      const author = info.authors?.[0] || null;
+    for (const doc of (data.docs || [])) {
+      const title = doc.title;
+      if (!title) continue;
 
-      return {
-        id: item.id,
-        title: info.title || 'Unknown Title',
+      // Must have a cover image
+      const coverId = doc.cover_i;
+      if (!coverId) continue;
+
+      // Must have an author
+      const author = doc.author_name?.[0] || null;
+      if (!author) continue;
+
+      // Filter non-Latin titles
+      if (!isLatinTitle(title)) continue;
+
+      // Filter junk
+      if (JUNK_PATTERNS.test(title)) continue;
+
+      // Filter series box sets like "Harry Potter (series) 1-7"
+      if (/\(series\)/i.test(title)) continue;
+
+      // Dedup by normalised title
+      const normTitle = title.toLowerCase()
+        .replace(/\(.*?\)/g, '')
+        .replace(/\[.*?\]/g, '')
+        .replace(/:\s*.*/g, '')
+        .replace(/\s*[-–—]\s*.*/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (seenTitles.has(normTitle)) continue;
+      seenTitles.add(normTitle);
+
+      const imageUrl = `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`;
+      const year = doc.first_publish_year ? String(doc.first_publish_year) : null;
+
+      results.push({
+        id: doc.key || `ol-${coverId}`,
+        title,
         author,
         imageUrl,
         year,
-        description: info.description || null,
-        pageCount: info.pageCount || null,
-        categories: info.categories || [],
-        averageRating: info.averageRating || null,
-      };
-    });
+        description: null,  // OL search doesn't return descriptions
+        pageCount: doc.number_of_pages_median || null,
+        categories: doc.subject?.slice(0, 3) || [],
+        averageRating: doc.ratings_average || null,
+      });
 
-    // ── Filter junk ──────────────────────────────────────────────────────
-    const filtered = rawResults.filter(book => {
-      if (!book.title || book.title === 'Unknown Title') return false;
-      if (!book.author) return false;
-      if (!book.imageUrl) return false;
-      if (JUNK_PATTERNS.test(book.title)) return false;
-
-      // Drop non-Latin titles (Russian, Chinese, Arabic, etc.)
-      if (/[^\u0000-\u024F\u1E00-\u1EFF]/.test(book.title)) return false;
-
-      // For title searches, query words must appear in the title
-      if (type === 'title' && q.length > 3) {
-        const queryWords = (q as string).toLowerCase().split(/\s+/).filter(w => w.length > 2);
-        const titleLower = book.title.toLowerCase();
-        if (!queryWords.some(w => titleLower.includes(w))) return false;
-      }
-
-      return true;
-    });
-
-    // ── Deduplicate by normalised title + author ─────────────────────────
-    // Keep the best version of each unique book
-    const seen = new Map<string, BookResult>();
-    for (const book of filtered) {
-      const normTitle = normalizeTitle(book.title);
-      // Normalize author: extract surname for dedup
-      // "J. K. Rowling" / "J.K. Rowling" / "Rowling, J. K." / "Rowling Joanne K" → "rowling"
-      const authorWords = (book.author || '')
-        .toLowerCase()
-        .replace(/[.,]/g, '')
-        .split(/\s+/)
-        .filter(w => w.length > 2);  // drop initials like "j", "k", "jk"
-      const normAuthor = authorWords[authorWords.length - 1] || '';  // surname is typically last
-      const key = `${normTitle}|${normAuthor}`;
-
-      const existing = seen.get(key);
-      if (!existing) {
-        seen.set(key, book);
-      } else {
-        // Prefer: has description > has page count > has year > earlier year (original edition)
-        const score = (b: BookResult) =>
-          (b.description ? 10 : 0) +
-          (b.pageCount ? 5 : 0) +
-          (b.year ? 2 : 0);
-        const bookScore = score(book);
-        const existingScore = score(existing);
-        if (bookScore > existingScore) {
-          seen.set(key, book);
-        } else if (bookScore === existingScore && book.year && existing.year && book.year < existing.year) {
-          // Prefer the earlier publication (more likely the original edition)
-          seen.set(key, book);
-        }
-      }
+      if (results.length >= requestedLimit) break;
     }
 
-    const results = Array.from(seen.values()).slice(0, requestedLimit);
-
-    const totalItems = data.totalItems || 0;
-    const hasMore = start + 40 < totalItems;
+    const totalItems = data.numFound || 0;
+    const hasMore = start + fetchLimit < totalItems;
     res.setHeader('Cache-Control', 'public, s-maxage=300');
     return res.status(200).json({ results, hasMore, totalItems });
   } catch (err: any) {
-    console.error('Google Books proxy error:', err);
+    console.error('Book search error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
