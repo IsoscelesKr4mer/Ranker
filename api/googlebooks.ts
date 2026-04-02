@@ -110,6 +110,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!book.imageUrl) return false;
       if (JUNK_PATTERNS.test(book.title)) return false;
 
+      // Drop non-Latin titles (Russian, Chinese, Arabic, etc.)
+      if (/[^\u0000-\u024F\u1E00-\u1EFF]/.test(book.title)) return false;
+
       // For title searches, query words must appear in the title
       if (type === 'title' && q.length > 3) {
         const queryWords = (q as string).toLowerCase().split(/\s+/).filter(w => w.length > 2);
