@@ -16,6 +16,77 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
   const third = items[2];
   const rest = items.slice(3);
 
+  // Split remaining items into two columns
+  const midpoint = Math.ceil(rest.length / 2);
+  const leftCol = rest.slice(0, midpoint);
+  const rightCol = rest.slice(midpoint);
+
+  const renderRestItem = (item: RankItem, globalIdx: number, localIdx: number) => {
+    const rowClass =
+      'flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/[0.028] transition-colors duration-150 group';
+
+    const rowContent = (
+      <>
+        {/* Rank number */}
+        <div className="w-6 text-right flex-shrink-0">
+          <span
+            className="text-xs font-bold tabular-nums group-hover:text-white/40 transition-colors"
+            style={{
+              color: 'rgba(255,255,255,0.18)',
+              fontFamily: 'var(--font-family-display)',
+            }}
+          >
+            {String(globalIdx + 4).padStart(2, '0')}
+          </span>
+        </div>
+
+        {/* Thumbnail — compact square */}
+        {item.imageUrl ? (
+          <div className="w-7 h-7 rounded overflow-hidden flex-shrink-0 bg-white/[0.05]">
+            <img
+              src={item.imageUrl}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="w-7 h-7 rounded bg-violet-600/10 flex-shrink-0" />
+        )}
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white/75 text-[13px] truncate leading-tight">
+            {item.title}
+          </p>
+        </div>
+      </>
+    );
+
+    if (localIdx < ANIMATED_COUNT) {
+      return (
+        <motion.div
+          key={item.id}
+          initial={{ opacity: 0, x: -18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{
+            duration: 0.28,
+            delay: 0.2 + localIdx * 0.04,
+            ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number],
+          }}
+          className={rowClass}
+        >
+          {rowContent}
+        </motion.div>
+      );
+    }
+
+    return (
+      <div key={item.id} className={rowClass}>
+        {rowContent}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3">
       {/* ── #1 Champion — Full-width cinematic hero ── */}
@@ -99,10 +170,10 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   01
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {/* Champion label */}
                   <p
-                    className="text-xs sm:text-sm font-bold tracking-[0.22em] uppercase"
+                    className="text-sm sm:text-base font-bold tracking-[0.22em] uppercase"
                     style={{
                       color: '#c9973a',
                       fontFamily: 'var(--font-family-display)',
@@ -113,18 +184,18 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
 
                   {/* Thin gold rule */}
                   <div
-                    className="w-10 h-px"
+                    className="w-12 h-px"
                     style={{ background: 'rgba(212,175,55,0.45)' }}
                   />
 
                   {/* Title */}
                   <h3
-                    className="font-bold text-white leading-tight"
+                    className="font-bold text-white leading-none"
                     style={{
                       fontFamily: 'var(--font-family-display)',
-                      fontSize: 'clamp(1.5rem, 5.5vw, 2.75rem)',
+                      fontSize: 'clamp(2rem, 7vw, 3.5rem)',
                       textShadow: '0 2px 20px rgba(0,0,0,0.5)',
-                      letterSpacing: '-0.01em',
+                      letterSpacing: '-0.02em',
                     }}
                   >
                     {first.title}
@@ -132,7 +203,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
 
                   {/* Subtitle */}
                   {first.subtitle && (
-                    <p className="text-white/45 text-sm sm:text-base">{first.subtitle}</p>
+                    <p className="text-white/45 text-base sm:text-lg">{first.subtitle}</p>
                   )}
                 </div>
               </div>
@@ -141,7 +212,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
         </motion.div>
       )}
 
-      {/* ── #2 and #3 — Compact horizontal cards ── */}
+      {/* ── #2 and #3 — Prominent horizontal cards ── */}
       {(second || third) && (
         <motion.div
           className="grid grid-cols-2 gap-3"
@@ -247,89 +318,27 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
         </motion.div>
       )}
 
-      {/* ── Remaining rankings — numbered list ── */}
+      {/* ── Remaining rankings — 2-column grid ── */}
       {rest.length > 0 && (
         <div className="pt-1">
           <p
-            className="text-[10px] font-bold tracking-[0.2em] uppercase px-1 mb-3"
+            className="text-[10px] font-bold tracking-[0.2em] uppercase px-1 mb-2"
             style={{ color: 'rgba(255,255,255,0.22)', fontFamily: 'var(--font-family-display)' }}
           >
             Also Ranked
           </p>
           <div
-            className="rounded-xl overflow-hidden border border-white/[0.055]"
+            className="rounded-xl overflow-hidden border border-white/[0.055] grid grid-cols-2"
             style={{ background: 'rgba(255,255,255,0.018)' }}
           >
-            {rest.map((item, idx) => {
-              const rowClass =
-                'flex items-center gap-2.5 px-3.5 py-1.5 border-b border-white/[0.045] last:border-0 hover:bg-white/[0.028] transition-colors duration-150 group';
-
-              const rowContent = (
-                <>
-                  {/* Rank number */}
-                  <div className="w-7 text-right flex-shrink-0">
-                    <span
-                      className="text-xs font-bold tabular-nums group-hover:text-white/40 transition-colors"
-                      style={{
-                        color: 'rgba(255,255,255,0.18)',
-                        fontFamily: 'var(--font-family-display)',
-                      }}
-                    >
-                      {String(idx + 4).padStart(2, '0')}
-                    </span>
-                  </div>
-
-                  {/* Thumbnail — compact square */}
-                  {item.imageUrl ? (
-                    <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0 bg-white/[0.05]">
-                      <img
-                        src={item.imageUrl}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-md bg-violet-600/10 flex-shrink-0" />
-                  )}
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white/82 text-sm truncate leading-tight">
-                      {item.title}
-                    </p>
-                    {item.subtitle && (
-                      <p className="text-xs text-white/32 truncate mt-0.5">{item.subtitle}</p>
-                    )}
-                  </div>
-                </>
-              );
-
-              // Only animate the first ANIMATED_COUNT items — beyond that the
-              // cumulative stagger delay would make items appear way too late.
-              if (idx < ANIMATED_COUNT) {
-                return (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: -18 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{
-                      duration: 0.28,
-                      delay: 0.2 + idx * 0.04,
-                      ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number],
-                    }}
-                    className={rowClass}
-                  >
-                    {rowContent}
-                  </motion.div>
-                );
-              }
-
-              return (
-                <div key={item.id} className={rowClass}>
-                  {rowContent}
-                </div>
-              );
-            })}
+            {/* Left column */}
+            <div className="border-r border-white/[0.045]">
+              {leftCol.map((item, idx) => renderRestItem(item, idx, idx))}
+            </div>
+            {/* Right column */}
+            <div>
+              {rightCol.map((item, idx) => renderRestItem(item, idx + midpoint, idx))}
+            </div>
           </div>
         </div>
       )}
