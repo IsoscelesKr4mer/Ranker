@@ -12,6 +12,7 @@ import {
   getInProgressSessions,
   deleteResult,
   deleteList,
+  deleteRankingSession,
   updateProfile,
   isUsernameTaken,
   uploadAvatar,
@@ -403,9 +404,9 @@ export default function Dashboard() {
 
             <div className="space-y-3">
               {inProgress.map((session) => (
-                <Link key={session.id} to={`/rank/${session.id}/resume`}>
-                  <Card padding="lg" hover className="space-y-3">
-                    <div className="flex items-center justify-between">
+                <div key={session.id} className="flex items-center gap-2">
+                  <Link to={`/rank/${session.id}/resume`} className="flex-1">
+                    <Card padding="lg" hover className="flex items-center justify-between">
                       <div className="space-y-1 flex-1">
                         <h3 className="font-semibold text-white">{session.listTitle}</h3>
                         <p className="text-xs text-white/50">
@@ -426,9 +427,25 @@ export default function Dashboard() {
                         </span>
                         <div className="text-violet-400 text-sm font-medium">Resume →</div>
                       </div>
-                    </div>
-                  </Card>
-                </Link>
+                    </Card>
+                  </Link>
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (confirm('Discard this ranking session?')) {
+                        const res = await deleteRankingSession(session.id);
+                        if (!res.error) {
+                          setInProgress(prev => prev.filter(s => s.id !== session.id));
+                        }
+                      }
+                    }}
+                    className="p-2.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                    title="Discard session"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           </motion.div>
