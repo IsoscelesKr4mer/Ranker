@@ -99,10 +99,10 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   01
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {/* Champion label */}
                   <p
-                    className="text-[10px] sm:text-xs font-bold tracking-[0.22em] uppercase"
+                    className="text-xs sm:text-sm font-bold tracking-[0.22em] uppercase"
                     style={{
                       color: '#c9973a',
                       fontFamily: 'var(--font-family-display)',
@@ -113,7 +113,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
 
                   {/* Thin gold rule */}
                   <div
-                    className="w-8 h-px"
+                    className="w-10 h-px"
                     style={{ background: 'rgba(212,175,55,0.45)' }}
                   />
 
@@ -122,8 +122,9 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                     className="font-bold text-white leading-tight"
                     style={{
                       fontFamily: 'var(--font-family-display)',
-                      fontSize: 'clamp(1.15rem, 4.5vw, 2rem)',
+                      fontSize: 'clamp(1.5rem, 5.5vw, 2.75rem)',
                       textShadow: '0 2px 20px rgba(0,0,0,0.5)',
+                      letterSpacing: '-0.01em',
                     }}
                   >
                     {first.title}
@@ -131,7 +132,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
 
                   {/* Subtitle */}
                   {first.subtitle && (
-                    <p className="text-white/45 text-xs sm:text-sm">{first.subtitle}</p>
+                    <p className="text-white/45 text-sm sm:text-base">{first.subtitle}</p>
                   )}
                 </div>
               </div>
@@ -151,7 +152,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
           {/* #2 Silver */}
           {second && (
             <div
-              className="relative overflow-hidden rounded-xl border border-slate-400/18 flex gap-3 p-3.5"
+              className="relative overflow-hidden rounded-xl border border-slate-400/18 flex gap-4 p-4 sm:p-5"
               style={{
                 background: 'rgba(255,255,255,0.032)',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
@@ -167,7 +168,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
               {second.imageUrl && (
                 <div
                   className="flex-shrink-0 rounded-lg overflow-hidden"
-                  style={{ width: '48px', aspectRatio: '2/3' }}
+                  style={{ width: '72px', aspectRatio: '2/3' }}
                 >
                   <img
                     src={second.imageUrl}
@@ -176,21 +177,21 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   />
                 </div>
               )}
-              <div className="flex flex-col justify-center min-w-0 gap-1">
+              <div className="flex flex-col justify-center min-w-0 gap-1.5">
                 <p
-                  className="text-[9px] font-bold tracking-[0.18em] uppercase"
+                  className="text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase"
                   style={{
                     color: '#7a8fa6',
                     fontFamily: 'var(--font-family-display)',
                   }}
                 >
-                  #2
+                  Runner-Up
                 </p>
-                <p className="font-bold text-white/88 text-xs leading-snug line-clamp-3">
+                <p className="font-bold text-white/90 text-sm sm:text-base leading-snug line-clamp-3">
                   {second.title}
                 </p>
                 {second.subtitle && (
-                  <p className="text-white/35 text-[10px]">{second.subtitle}</p>
+                  <p className="text-white/35 text-[11px] sm:text-xs">{second.subtitle}</p>
                 )}
               </div>
             </div>
@@ -199,7 +200,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
           {/* #3 Bronze */}
           {third && (
             <div
-              className="relative overflow-hidden rounded-xl border border-orange-700/20 flex gap-3 p-3.5"
+              className="relative overflow-hidden rounded-xl border border-orange-700/20 flex gap-4 p-4 sm:p-5"
               style={{
                 background: 'rgba(255,255,255,0.032)',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
@@ -215,7 +216,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
               {third.imageUrl && (
                 <div
                   className="flex-shrink-0 rounded-lg overflow-hidden"
-                  style={{ width: '48px', aspectRatio: '2/3' }}
+                  style={{ width: '72px', aspectRatio: '2/3' }}
                 >
                   <img
                     src={third.imageUrl}
@@ -224,21 +225,21 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   />
                 </div>
               )}
-              <div className="flex flex-col justify-center min-w-0 gap-1">
+              <div className="flex flex-col justify-center min-w-0 gap-1.5">
                 <p
-                  className="text-[9px] font-bold tracking-[0.18em] uppercase"
+                  className="text-[10px] sm:text-[11px] font-bold tracking-[0.18em] uppercase"
                   style={{
                     color: '#9a6035',
                     fontFamily: 'var(--font-family-display)',
                   }}
                 >
-                  #3
+                  Third Place
                 </p>
-                <p className="font-bold text-white/88 text-xs leading-snug line-clamp-3">
+                <p className="font-bold text-white/90 text-sm sm:text-base leading-snug line-clamp-3">
                   {third.title}
                 </p>
                 {third.subtitle && (
-                  <p className="text-white/35 text-[10px]">{third.subtitle}</p>
+                  <p className="text-white/35 text-[11px] sm:text-xs">{third.subtitle}</p>
                 )}
               </div>
             </div>
@@ -261,7 +262,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
           >
             {rest.map((item, idx) => {
               const rowClass =
-                'flex items-center gap-3 px-4 py-3 border-b border-white/[0.045] last:border-0 hover:bg-white/[0.028] transition-colors duration-150 group';
+                'flex items-center gap-2.5 px-3.5 py-1.5 border-b border-white/[0.045] last:border-0 hover:bg-white/[0.028] transition-colors duration-150 group';
 
               const rowContent = (
                 <>
@@ -278,9 +279,9 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                     </span>
                   </div>
 
-                  {/* Thumbnail — portrait ratio */}
+                  {/* Thumbnail — compact square */}
                   {item.imageUrl ? (
-                    <div className="w-9 h-[52px] rounded-md overflow-hidden flex-shrink-0 bg-white/[0.05]">
+                    <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0 bg-white/[0.05]">
                       <img
                         src={item.imageUrl}
                         alt={item.title}
@@ -288,7 +289,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                       />
                     </div>
                   ) : (
-                    <div className="w-9 h-[52px] rounded-md bg-violet-600/10 flex-shrink-0" />
+                    <div className="w-8 h-8 rounded-md bg-violet-600/10 flex-shrink-0" />
                   )}
 
                   {/* Info */}

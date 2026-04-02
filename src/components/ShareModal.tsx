@@ -20,13 +20,123 @@ function getRankMeta(idx: number) {
 }
 
 function ShareCardInner({ items, listTitle }: ShareCardProps) {
-  // Row sizing: #1 is tall, #2-3 are medium, rest are compact
-  const rowPadding = (idx: number) => idx === 0 ? '14px 18px' : idx < 3 ? '10px 18px' : '8px 18px';
-  const numSize   = (idx: number) => idx === 0 ? '32px' : idx < 3 ? '20px' : '16px';
-  const titleSize = (idx: number) => idx === 0 ? '22px' : idx < 3 ? '18px' : '15px';
-  const titleWeight = (idx: number) => idx === 0 ? 700 : idx < 3 ? 600 : 500;
-  const titleColor  = (idx: number) => idx === 0 ? '#ffffff' : idx < 3 ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.72)';
-  const subSize   = (idx: number) => idx < 3 ? '12px' : '11px';
+  const top3 = items.slice(0, 3);
+  const rest = items.slice(3);
+
+  // Split remaining items into two columns
+  const midpoint = Math.ceil(rest.length / 2);
+  const leftCol = rest.slice(0, midpoint);
+  const rightCol = rest.slice(midpoint);
+
+  function renderTopItem(item: RankItem, idx: number) {
+    const meta = getRankMeta(idx);
+    const numSize = idx === 0 ? '36px' : '22px';
+    const titleSize = idx === 0 ? '26px' : '20px';
+    const titleWeight = idx === 0 ? 700 : 600;
+    const titleColor = idx === 0 ? '#ffffff' : 'rgba(255,255,255,0.88)';
+    const padding = idx === 0 ? '16px 20px' : '11px 20px';
+
+    return (
+      <div
+        key={item.id}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px',
+          padding,
+          background: meta.bg,
+          borderRadius: '8px',
+          borderLeft: `3px solid ${meta.border}`,
+        }}
+      >
+        <div style={{
+          fontSize: numSize,
+          fontWeight: 900,
+          color: meta.color,
+          lineHeight: 1,
+          width: '48px',
+          textAlign: 'right',
+          flexShrink: 0,
+          letterSpacing: '-0.02em',
+        }}>
+          {String(idx + 1).padStart(2, '0')}
+        </div>
+        <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: titleSize,
+            fontWeight: titleWeight,
+            color: titleColor,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: 1.25,
+          }}>
+            {item.title}
+          </div>
+          {item.subtitle && (
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.32)', marginTop: '2px' }}>
+              {item.subtitle}
+            </div>
+          )}
+        </div>
+        {meta.label && (
+          <div style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            color: meta.color,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            flexShrink: 0,
+          }}>
+            {meta.label}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderCompactItem(item: RankItem, globalIdx: number) {
+    return (
+      <div
+        key={item.id}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '5px 12px',
+          borderLeft: '3px solid transparent',
+        }}
+      >
+        <div style={{
+          fontSize: '14px',
+          fontWeight: 800,
+          color: 'rgba(255,255,255,0.22)',
+          lineHeight: 1,
+          width: '28px',
+          textAlign: 'right',
+          flexShrink: 0,
+          letterSpacing: '-0.02em',
+        }}>
+          {String(globalIdx + 1).padStart(2, '0')}
+        </div>
+        <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: '14px',
+            fontWeight: 500,
+            color: 'rgba(255,255,255,0.68)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: 1.3,
+          }}>
+            {item.title}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -39,13 +149,13 @@ function ShareCardInner({ items, listTitle }: ShareCardProps) {
         position: 'relative',
       }}
     >
-      {/* Atmospheric glows — fixed position so they always show at top/bottom */}
+      {/* Atmospheric glows */}
       <div style={{ position: 'absolute', top: '-100px', left: '-80px', width: '520px', height: '520px', background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: '0', right: '0', width: '400px', height: '400px', background: 'radial-gradient(circle at top right, rgba(124,58,237,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
-      <div style={{ padding: '52px 68px 56px', position: 'relative' }}>
+      <div style={{ padding: '48px 60px 48px', position: 'relative' }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', marginBottom: '10px' }}>
               My Ranking
@@ -60,82 +170,28 @@ function ShareCardInner({ items, listTitle }: ShareCardProps) {
         </div>
 
         {/* Divider */}
-        <div style={{ height: '1px', background: 'linear-gradient(to right, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)', marginBottom: '18px' }} />
+        <div style={{ height: '1px', background: 'linear-gradient(to right, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)', marginBottom: '16px' }} />
 
-        {/* All items */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {items.map((item, idx) => {
-            const meta = getRankMeta(idx);
-            return (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '20px',
-                  padding: rowPadding(idx),
-                  background: meta.bg,
-                  borderRadius: '8px',
-                  borderLeft: `3px solid ${meta.border}`,
-                }}
-              >
-                {/* Rank number */}
-                <div style={{
-                  fontSize: numSize(idx),
-                  fontWeight: 900,
-                  color: meta.color,
-                  lineHeight: 1,
-                  width: '48px',
-                  textAlign: 'right',
-                  flexShrink: 0,
-                  letterSpacing: '-0.02em',
-                }}>
-                  {String(idx + 1).padStart(2, '0')}
-                </div>
-
-                {/* Vertical rule */}
-                <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
-
-                {/* Text */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: titleSize(idx),
-                    fontWeight: titleWeight(idx),
-                    color: titleColor(idx),
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    lineHeight: 1.25,
-                  }}>
-                    {item.title}
-                  </div>
-                  {item.subtitle && (
-                    <div style={{ fontSize: subSize(idx), color: 'rgba(255,255,255,0.32)', marginTop: '2px' }}>
-                      {item.subtitle}
-                    </div>
-                  )}
-                </div>
-
-                {/* Medal label (top 3 only) */}
-                {meta.label && (
-                  <div style={{
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    color: meta.color,
-                    letterSpacing: '0.16em',
-                    textTransform: 'uppercase',
-                    flexShrink: 0,
-                  }}>
-                    {meta.label}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {/* Top 3 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: rest.length > 0 ? '16px' : '0' }}>
+          {top3.map((item, idx) => renderTopItem(item, idx))}
         </div>
 
+        {/* Remaining items — 2-column layout */}
+        {rest.length > 0 && (
+          <div style={{ display: 'flex', gap: '24px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {leftCol.map((item, idx) => renderCompactItem(item, idx + 3))}
+            </div>
+            <div style={{ width: '1px', background: 'rgba(255,255,255,0.04)', flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {rightCol.map((item, idx) => renderCompactItem(item, idx + 3 + midpoint))}
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '20px' }}>
           <div style={{ height: '1px', flex: 1, background: 'rgba(255,255,255,0.06)' }} />
           <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.18)', letterSpacing: '0.08em' }}>
             Make your own ranking at ranker.app
