@@ -215,7 +215,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
       {/* ── #2 and #3 — Prominent horizontal cards ── */}
       {(second || third) && (
         <motion.div
-          className="grid grid-cols-2 gap-3"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
@@ -238,8 +238,8 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
               />
               {second.imageUrl && (
                 <div
-                  className="flex-shrink-0 rounded-lg overflow-hidden"
-                  style={{ width: '72px', aspectRatio: '2/3' }}
+                  className="flex-shrink-0 rounded-lg overflow-hidden w-20 sm:w-[72px]"
+                  style={{ aspectRatio: '2/3' }}
                 >
                   <img
                     src={second.imageUrl}
@@ -286,8 +286,8 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
               />
               {third.imageUrl && (
                 <div
-                  className="flex-shrink-0 rounded-lg overflow-hidden"
-                  style={{ width: '72px', aspectRatio: '2/3' }}
+                  className="flex-shrink-0 rounded-lg overflow-hidden w-20 sm:w-[72px]"
+                  style={{ aspectRatio: '2/3' }}
                 >
                   <img
                     src={third.imageUrl}
@@ -304,7 +304,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                     fontFamily: 'var(--font-family-display)',
                   }}
                 >
-                  Third Place
+                  3rd Place
                 </p>
                 <p className="font-bold text-white/90 text-sm sm:text-base leading-snug line-clamp-3">
                   {third.title}
@@ -327,8 +327,16 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
           >
             Also Ranked
           </p>
+          {/* Mobile: single column — full title width, no truncation pressure */}
           <div
-            className="rounded-xl overflow-hidden border border-white/[0.055] grid grid-cols-2"
+            className="sm:hidden rounded-xl overflow-hidden border border-white/[0.055]"
+            style={{ background: 'rgba(255,255,255,0.018)' }}
+          >
+            {rest.map((item, idx) => renderRestItem(item, idx, idx))}
+          </div>
+          {/* sm+: two columns */}
+          <div
+            className="hidden sm:grid rounded-xl overflow-hidden border border-white/[0.055] grid-cols-2"
             style={{ background: 'rgba(255,255,255,0.018)' }}
           >
             {/* Left column */}
