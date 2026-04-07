@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, Check, Loader2 } from 'lucide-react';
+import { Upload, X, Check, Loader2, RotateCcw } from 'lucide-react';
 import { uploadListImage } from '@/lib/database';
 
 export interface LibraryImage {
@@ -9,6 +9,15 @@ export interface LibraryImage {
   name: string;
   status: 'uploading' | 'ready' | 'error';
   error?: string;
+}
+
+/** Number of automatic retry attempts before giving up and surfacing a manual retry button. */
+const AUTO_RETRY_ATTEMPTS = 2;
+/** Base backoff between retries (ms). Doubles per attempt. */
+const RETRY_BACKOFF_MS = 750;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 interface ImageLibraryProps {
@@ -38,6 +47,19 @@ function filenameToTitle(filename: string): string {
 /** Max file size: 5MB */
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+/** Per-file upload timeout — Supabase storage can hang silently on flaky networks. */
+const UPLOAD_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Upload timed out')), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 /**
  * Compress an image blob/file to a data URL, resized to max 600px wide.
@@ -77,6 +99,87 @@ export function ImageLibrary({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Keep the original File handle for each library entry so we can retry failed
+  // uploads without making the user re-pick the file. Lives in a ref (not state)
+  // because File objects aren't meaningfully serializable and don't need to drive
+  // re-renders — only their upload status does.
+  const fileMapRef = useRef<Map<string, File>>(new Map());
+  // Tracks whether a given entry has already been emitted to onItemsCreated, so
+  // a successful retry doesn't create a duplicate item.
+  const createdMapRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Attempt to upload a single file for an existing library entry, with automatic
+   * retry + exponential backoff. If all retries fail, falls back to a compressed
+   * data URL so the image is at least usable locally; if even that fails, the
+   * entry is marked as an error tile with a manual retry button.
+   *
+   * Called both for initial uploads and for user-initiated retries — the caller
+   * is responsible for flipping the entry back to `'uploading'` state first.
+   */
+  const uploadOne = useCallback(
+    async (entry: LibraryImage, file: File) => {
+      // Kick off compression in parallel — it's purely local and cheap.
+      const dataUrlPromise = compressToDataUrl(file);
+
+      let finalUrl: string | null = null;
+      let lastError: string | null = null;
+
+      for (let attempt = 0; attempt <= AUTO_RETRY_ATTEMPTS; attempt++) {
+        try {
+          const result = await withTimeout(uploadListImage(file), UPLOAD_TIMEOUT_MS);
+          if ('url' in result) {
+            finalUrl = result.url;
+            break;
+          }
+          lastError = result.error || 'Upload failed';
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : 'Upload failed';
+        }
+        // Don't sleep after the last attempt.
+        if (attempt < AUTO_RETRY_ATTEMPTS) {
+          await sleep(RETRY_BACKOFF_MS * Math.pow(2, attempt));
+        }
+      }
+
+      // Fall back to a local data URL if Supabase is hosed — at least the user's
+      // list is still usable in this session and the tile shows as ready.
+      if (!finalUrl) {
+        const dataUrl = await dataUrlPromise;
+        if (dataUrl) finalUrl = dataUrl;
+      }
+
+      onImagesChange((prev) => {
+        const next = [...prev];
+        const idx = next.findIndex((img) => img.id === entry.id);
+        if (idx !== -1) {
+          if (next[idx].url.startsWith('blob:')) {
+            URL.revokeObjectURL(next[idx].url);
+          }
+          next[idx] = {
+            ...next[idx],
+            url: finalUrl || next[idx].url,
+            status: finalUrl ? 'ready' : 'error',
+            error: finalUrl ? undefined : lastError || 'Upload failed',
+          };
+        }
+        return next;
+      });
+
+      // Only create the item the first time this entry succeeds — retries must
+      // not duplicate items.
+      if (finalUrl && !createdMapRef.current.has(entry.id) && onItemsCreated && !pickMode) {
+        createdMapRef.current.add(entry.id);
+        onItemsCreated([{
+          id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          title: filenameToTitle(entry.name),
+          imageUrl: finalUrl,
+        }]);
+      }
+    },
+    [onImagesChange, onItemsCreated, pickMode]
+  );
+
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
       const fileArray = Array.from(files).filter(f => {
@@ -89,84 +192,52 @@ export function ImageLibrary({
 
       // Create entries with local object URLs immediately for instant preview
       const newImages: LibraryImage[] = fileArray.map((f, i) => ({
-        id: `upload-${Date.now()}-${i}`,
+        id: `upload-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
         url: URL.createObjectURL(f),
         name: f.name,
         status: 'uploading' as const,
       }));
 
-      const updated = [...images, ...newImages];
-      onImagesChange(updated);
-
-      // Pre-compute compressed data URLs as navigation-safe fallback.
-      // These survive page transitions and can be stored in the database,
-      // unlike blob: URLs which are tab-scoped and die on navigation.
-      const dataUrlsPromise = Promise.all(fileArray.map(f => compressToDataUrl(f)));
-
-      // Try to upload to Supabase in parallel
-      const [dataUrls, results] = await Promise.all([
-        dataUrlsPromise,
-        Promise.allSettled(
-          fileArray.map(async (file, i) => {
-            const result = await uploadListImage(file);
-            return { index: i, result };
-          })
-        ),
-      ]);
-
-      // Resolve final URLs synchronously from results BEFORE any state updates.
-      // This is critical: React state updater functions (setState(fn)) are scheduled
-      // and do not execute synchronously. If we populated finalUrls inside the updater,
-      // it would still be empty {} when onItemsCreated runs — causing blob: URLs to be
-      // saved to the database instead of the real Supabase public URLs.
-      const finalUrls: Record<string, string> = {};
-      results.forEach(settled => {
-        if (settled.status === 'fulfilled') {
-          const { index, result } = settled.value;
-          const entry = newImages[index];
-          if ('url' in result) {
-            // Supabase succeeded — permanent public URL
-            finalUrls[entry.id] = result.url;
-          } else {
-            // Supabase failed — fall back to compressed data URL (survives navigation)
-            const dataUrl = dataUrls[index];
-            if (dataUrl) finalUrls[entry.id] = dataUrl;
-          }
-        }
+      // Stash each file so retries don't need a re-pick.
+      newImages.forEach((entry, i) => {
+        fileMapRef.current.set(entry.id, fileArray[i]);
       });
 
-      onImagesChange(prev => {
+      onImagesChange(prev => [...prev, ...newImages]);
+
+      // Each file settles independently — one stuck upload cannot block others.
+      await Promise.all(
+        newImages.map((entry, i) => uploadOne(entry, fileArray[i]))
+      );
+    },
+    [onImagesChange, uploadOne]
+  );
+
+  /** User-initiated retry from the error overlay button. */
+  const handleRetry = useCallback(
+    (id: string) => {
+      const file = fileMapRef.current.get(id);
+      if (!file) return;
+      // Flip back to uploading visually and kick a fresh attempt.
+      onImagesChange((prev) => {
         const next = [...prev];
-        newImages.forEach(entry => {
-          const entryIndex = next.findIndex(img => img.id === entry.id);
-          if (entryIndex !== -1) {
-            const finalUrl = finalUrls[entry.id];
-            URL.revokeObjectURL(next[entryIndex].url);
-            next[entryIndex] = {
-              ...next[entryIndex],
-              url: finalUrl || next[entryIndex].url,
-              status: finalUrl ? 'ready' : 'error',
-              error: finalUrl ? undefined : 'Upload failed',
-            };
-          }
-        });
+        const idx = next.findIndex((img) => img.id === id);
+        if (idx !== -1) {
+          next[idx] = { ...next[idx], status: 'uploading', error: undefined };
+        }
         return next;
       });
-
-      // Auto-create items from filenames when not in pick mode.
-      // finalUrls is now fully populated, so imageUrl will be the real Supabase URL.
-      if (onItemsCreated && !pickMode) {
-        const autoItems = newImages
-          .filter(img => finalUrls[img.id])
-          .map(img => ({
-            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            title: filenameToTitle(img.name),
-            imageUrl: finalUrls[img.id],
-          }));
-        if (autoItems.length > 0) onItemsCreated(autoItems);
-      }
+      // Use the current entry as a shape carrier; the real state update happens
+      // inside uploadOne once it resolves.
+      const carrier: LibraryImage = {
+        id,
+        url: '',
+        name: file.name,
+        status: 'uploading',
+      };
+      void uploadOne(carrier, file);
     },
-    [images, onImagesChange, onItemsCreated, pickMode]
+    [onImagesChange, uploadOne]
   );
 
   const handleFileInput = useCallback(
@@ -202,6 +273,8 @@ export function ImageLibrary({
 
   const handleRemove = useCallback(
     (id: string) => {
+      fileMapRef.current.delete(id);
+      createdMapRef.current.delete(id);
       onImagesChange(images.filter(img => img.id !== id));
     },
     [images, onImagesChange]
@@ -313,10 +386,19 @@ export function ImageLibrary({
                       </div>
                     )}
 
-                    {/* Error overlay */}
+                    {/* Error overlay — shows retry when we still have the file in memory */}
                     {img.status === 'error' && (
-                      <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
-                        <X className="w-5 h-5 text-red-300" />
+                      <div className="absolute inset-0 bg-red-900/70 flex flex-col items-center justify-center gap-1">
+                        <X className="w-4 h-4 text-red-300" />
+                        {fileMapRef.current.has(img.id) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleRetry(img.id); }}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-[10px] font-medium text-white transition-colors"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" /> Retry
+                          </button>
+                        )}
                       </div>
                     )}
 

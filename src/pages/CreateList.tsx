@@ -125,6 +125,82 @@ export default function CreateList() {
     }
   }, [location.state]);
 
+  // ── Draft autosave ─────────────────────────────────────────────────────────
+  // Persist in-progress new lists to localStorage so a refresh or browser
+  // crash doesn't nuke the user's work. Only runs in "new list" mode — edit
+  // mode is already round-tripped through the database.
+  const DRAFT_KEY = 'createList:draft:v1';
+  const draftHydrated = useRef(false);
+
+  useEffect(() => {
+    if (draftHydrated.current) return;
+    // If we're entering edit mode or auto-importing, skip draft hydration.
+    const state = location.state as { editList?: RankList; letterboxdUrl?: string } | null;
+    if (state?.editList || state?.letterboxdUrl) {
+      draftHydrated.current = true;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) { draftHydrated.current = true; return; }
+      const draft = JSON.parse(raw) as {
+        listTitle?: string;
+        selectedCategory?: string;
+        items?: RankItem[];
+        tagsInput?: string;
+        isCommunity?: boolean;
+        savedAt?: number;
+      };
+      // Expire drafts older than 7 days.
+      if (draft.savedAt && Date.now() - draft.savedAt > 7 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(DRAFT_KEY);
+        draftHydrated.current = true;
+        return;
+      }
+      if (draft.listTitle) setListTitle(draft.listTitle);
+      if (draft.selectedCategory) setSelectedCategory(draft.selectedCategory);
+      if (draft.items && draft.items.length > 0) setItems(draft.items);
+      if (draft.tagsInput) setTagsInput(draft.tagsInput);
+      if (typeof draft.isCommunity === 'boolean') setIsCommunity(draft.isCommunity);
+    } catch {
+      // Corrupt draft — ignore and wipe it.
+      try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    }
+    draftHydrated.current = true;
+  }, [location.state]);
+
+  // Debounced save. Skip in edit mode — that path writes straight to the DB.
+  useEffect(() => {
+    if (!draftHydrated.current) return;
+    if (editListId) return;
+    // Nothing worth saving yet.
+    if (!listTitle.trim() && items.length === 0) return;
+    const timer = setTimeout(() => {
+      try {
+        // Don't persist in-flight blob: URLs — they'll be dead on reload.
+        const safeItems = items.map(it => ({
+          ...it,
+          imageUrl: it.imageUrl && it.imageUrl.startsWith('blob:') ? null : it.imageUrl,
+        }));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          listTitle,
+          selectedCategory,
+          items: safeItems,
+          tagsInput,
+          isCommunity,
+          savedAt: Date.now(),
+        }));
+      } catch {
+        // Quota exceeded or unavailable — silently ignore.
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [listTitle, selectedCategory, items, tagsInput, isCommunity, editListId]);
+
+  const clearDraft = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }, []);
+
   // Auto-import if arriving from Browse page with a Letterboxd URL
   const hasAutoImported = useRef(false);
   useEffect(() => {
@@ -521,6 +597,7 @@ export default function CreateList() {
         const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
         const result = await saveList({ title: listTitle, category: selectedCategory, source: 'web', items, isCommunity, isPublic: true, tags });
         if ('error' in result) { setSaveError(result.error); return; }
+        clearDraft();
         navigate('/ranking/custom', { state: { listId: result.listId, listTitle, category: selectedCategory, items } });
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Failed to save list');
@@ -540,7 +617,7 @@ export default function CreateList() {
       const tags = tagsInput.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
       const result = await saveList({ title: listTitle, category: selectedCategory, source: 'web', items, isCommunity, isPublic: true, tags });
       if ('error' in result) { setSaveError(result.error); }
-      else { setSavedSuccess(true); setTimeout(() => setSavedSuccess(false), 4000); }
+      else { clearDraft(); setSavedSuccess(true); setTimeout(() => setSavedSuccess(false), 4000); }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save list');
     } finally { setIsSaving(false); }
@@ -572,6 +649,7 @@ export default function CreateList() {
       if ('error' in result) { setSaveError(result.error); }
       else {
         // Switch to editing the newly created list
+        clearDraft();
         setEditListId(result.listId);
         setSavedSuccess(true);
         setTimeout(() => setSavedSuccess(false), 4000);
@@ -587,8 +665,10 @@ export default function CreateList() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isSearchableCategory = ['Movies', 'TV', 'Games', 'Music', 'Books'].includes(selectedCategory);
-  const canStartRanking = items.length >= 3 && listTitle.trim();
-  const canSave = items.length > 0 && listTitle.trim() && !!user;
+  // Block save/start while any image is mid-upload — otherwise we'd persist dead blob: URLs.
+  const isUploadingImages = libraryImages.some(img => img.status === 'uploading');
+  const canStartRanking = items.length >= 3 && listTitle.trim() && !isUploadingImages;
+  const canSave = items.length > 0 && listTitle.trim() && !!user && !isUploadingImages;
 
   const searchPlaceholder =
     selectedCategory === 'TV' ? 'Search TV shows...'
