@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { toPng } from 'html-to-image';
+import { toBlob } from 'html-to-image';
 import { motion } from 'framer-motion';
 import { Download, Link2, Share2, Check, Loader2, ChevronRight } from 'lucide-react';
 import { Modal } from '@/components/ui';
@@ -277,21 +277,63 @@ export function ShareModal({ isOpen, onClose, listTitle, items, shareLink, isSav
   const [nativeState, setNativeState] = useState<OptionState>('idle');
 
   const hasNativeShare = typeof navigator !== 'undefined' && Boolean(navigator.share);
+  // Feature-detect file sharing support (iOS 15+, modern Android Chrome).
+  // Used to decide whether "Download Image" should open the native share
+  // sheet with the PNG attached (mobile) or trigger a file download (desktop).
+  const canShareFiles =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    Boolean(navigator.share);
 
-  // ── Download image ──────────────────────────────────────────────────────
+  // ── Download / share image ──────────────────────────────────────────────
   const handleDownloadImage = useCallback(async () => {
     if (!cardRef.current) return;
     setImgState('loading');
     try {
-      const dataUrl = await toPng(cardRef.current, {
+      const blob = await toBlob(cardRef.current, {
         cacheBust: true,
         pixelRatio: 2,
         skipFonts: false,
       });
+      if (!blob) throw new Error('Failed to generate image blob');
+
+      const safeTitle = listTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase() || 'ranking';
+      const filename = `${safeTitle}-ranking.png`;
+      const file = new File([blob], filename, { type: 'image/png' });
+
+      // Mobile path: open the native share sheet with the image attached.
+      // This lets users send via iMessage, save to Photos, post to IG, etc.
+      if (canShareFiles && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `My ${listTitle} Ranking`,
+            text: `Check out my top picks for "${listTitle}"`,
+          });
+          setImgState('done');
+          setTimeout(() => setImgState('idle'), 2500);
+          return;
+        } catch (err) {
+          // AbortError = user dismissed the share sheet; not a failure.
+          if (err instanceof Error && err.name === 'AbortError') {
+            setImgState('idle');
+            return;
+          }
+          // Any other error — fall through to the download fallback below.
+          console.warn('Native share failed, falling back to download:', err);
+        }
+      }
+
+      // Desktop fallback: trigger a file download via object URL.
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `${listTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-ranking.png`;
-      link.href = dataUrl;
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
       setImgState('done');
       setTimeout(() => setImgState('idle'), 2500);
     } catch (err) {
@@ -299,7 +341,7 @@ export function ShareModal({ isOpen, onClose, listTitle, items, shareLink, isSav
       setImgState('error');
       setTimeout(() => setImgState('idle'), 2500);
     }
-  }, [listTitle]);
+  }, [listTitle, canShareFiles]);
 
   // ── Copy link ───────────────────────────────────────────────────────────
   const handleCopyLink = useCallback(async () => {
@@ -364,11 +406,15 @@ export function ShareModal({ isOpen, onClose, listTitle, items, shareLink, isSav
 
       <Modal isOpen={isOpen} onClose={onClose} title="Share Your Ranking" size="sm">
         <div className="space-y-2">
-          {/* Download image */}
+          {/* Download / share image */}
           <ShareOption
-            icon={<Download className="w-4 h-4" />}
-            title="Download Image"
-            description="Save as PNG — perfect for X, Instagram, anywhere"
+            icon={canShareFiles ? <Share2 className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+            title={canShareFiles ? 'Share Image' : 'Download Image'}
+            description={
+              canShareFiles
+                ? 'Send via Messages, save to Photos, post anywhere'
+                : 'Save as PNG — perfect for X, Instagram, anywhere'
+            }
             state={imgState}
             onClick={handleDownloadImage}
             accentColor="#7c3aed"
