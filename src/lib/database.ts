@@ -776,6 +776,28 @@ export async function isUsernameTaken(username: string, excludeUserId?: string):
   return (count || 0) > 0;
 }
 
+export async function searchProfiles(query: string): Promise<PublicProfile[]> {
+  if (!isSupabaseConfigured() || !query.trim()) return [];
+
+  const term = `%${query.trim()}%`;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url, created_at')
+    .or(`username.ilike.${term},display_name.ilike.${term}`)
+    .limit(8);
+
+  if (error || !data) return [];
+
+  return data.map((d) => ({
+    id: d.id,
+    username: d.username,
+    displayName: d.display_name,
+    avatarUrl: d.avatar_url,
+    createdAt: d.created_at,
+  }));
+}
+
 export async function getPublicProfile(userId: string): Promise<PublicProfile | null> {
   if (!isSupabaseConfigured()) return null;
 

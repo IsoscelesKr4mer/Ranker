@@ -3,6 +3,7 @@ import { Menu, X, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui';
+import { UserSearch } from '@/components/layout/UserSearch';
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -53,6 +54,7 @@ export function Navbar() {
 
           {/* Auth area */}
           <div className="hidden md:flex items-center gap-2.5">
+            <UserSearch />
             {status === 'authenticated' && user ? (
               <div className="flex items-center gap-2.5">
                 <Link
@@ -98,6 +100,9 @@ export function Navbar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-white/[0.06] bg-[#060610]/98 backdrop-blur-xl">
           <div className="px-4 py-3 space-y-0.5">
+            <div className="pb-2">
+              <UserSearch onNavigate={() => setMobileOpen(false)} />
+            </div>
             {links.map(link => (
               <Link
                 key={link.to}
