@@ -148,6 +148,40 @@ export async function searchTV(query: string, page = 1): Promise<{ shows: TMDbTV
   return { shows: data.results, totalPages: data.total_pages };
 }
 
+/**
+ * Backfill missing poster images for items stored without artwork.
+ * Tries by tmdbId first, then falls back to a title search.
+ */
+export async function backfillMissingImages(items: import('@/types').RankItem[]): Promise<import('@/types').RankItem[]> {
+  const needsFill = items.filter(i => !i.imageUrl);
+  if (needsFill.length === 0) return items;
+
+  const fetches = await Promise.all(
+    needsFill.map(async (item) => {
+      try {
+        // Try direct lookup by tmdbId first
+        if (item.metadata?.tmdbId) {
+          const details = await getMovieDetails(item.metadata.tmdbId as number);
+          if (details?.poster_path) {
+            return { id: item.id, posterUrl: tmdbImage(details.poster_path) };
+          }
+        }
+        // Fall back to title search
+        const { movies } = await searchMovies(decodeEntities(item.title));
+        if (movies.length > 0 && movies[0].poster_path) {
+          return { id: item.id, posterUrl: tmdbImage(movies[0].poster_path) };
+        }
+      } catch { /* skip */ }
+      return { id: item.id, posterUrl: null };
+    })
+  );
+
+  const patchMap = new Map(fetches.filter(f => f.posterUrl).map(f => [f.id, f.posterUrl!]));
+  if (patchMap.size === 0) return items;
+
+  return items.map(item => patchMap.has(item.id) ? { ...item, imageUrl: patchMap.get(item.id)! } : item);
+}
+
 // Convert TMDb movie to our generic RankItem
 export function tmdbToRankItem(movie: TMDbMovie): import('@/types').RankItem {
   return {

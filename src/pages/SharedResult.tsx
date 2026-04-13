@@ -7,6 +7,7 @@ import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
 import { ShareModal } from '@/components/ShareModal';
 import { getSharedResult } from '@/lib/database';
+import { backfillMissingImages } from '@/lib/tmdb';
 import type { RankItem } from '@/types';
 
 export default function SharedResult() {
@@ -22,7 +23,10 @@ export default function SharedResult() {
 
   useEffect(() => {
     if (!shareId) return;
-    getSharedResult(shareId).then((data) => {
+    getSharedResult(shareId).then(async (data) => {
+      if (data) {
+        data.results = await backfillMissingImages(data.results);
+      }
       setResult(data);
       setLoading(false);
     });

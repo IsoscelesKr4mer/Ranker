@@ -7,6 +7,7 @@ import { PageLayout } from '@/components/layout';
 import { RankingDisplay } from '@/components/RankingDisplay';
 import { ShareModal } from '@/components/ShareModal';
 import { getResultById, deleteResult, makeResultPublic } from '@/lib/database';
+import { backfillMissingImages } from '@/lib/tmdb';
 import { useAuthStore } from '@/store/authStore';
 import type { RankItem } from '@/types';
 
@@ -37,7 +38,10 @@ export default function SavedResult() {
       return;
     }
     getResultById(resultId)
-      .then((data) => {
+      .then(async (data) => {
+        if (data) {
+          data.results = await backfillMissingImages(data.results);
+        }
         setResult(data);
         // Populate share link if the result is already public
         if (data?.shareId) {
