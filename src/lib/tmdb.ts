@@ -2,6 +2,13 @@ const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || '';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
+/** Decode HTML entities (e.g. &amp; &#039;) that TMDb sometimes returns in titles */
+function decodeEntities(text: string): string {
+  const el = document.createElement('textarea');
+  el.innerHTML = text;
+  return el.value;
+}
+
 export const tmdbImage = (path: string | null, size: 'w200' | 'w300' | 'w500' | 'original' = 'w500') => {
   if (!path) return null;
   return `${IMAGE_BASE}/${size}${path}`;
@@ -145,7 +152,7 @@ export async function searchTV(query: string, page = 1): Promise<{ shows: TMDbTV
 export function tmdbToRankItem(movie: TMDbMovie): import('@/types').RankItem {
   return {
     id: `tmdb-${movie.id}`,
-    title: movie.title,
+    title: decodeEntities(movie.title),
     imageUrl: tmdbImage(movie.poster_path),
     subtitle: movie.release_date ? movie.release_date.slice(0, 4) : undefined,
     metadata: {
@@ -161,7 +168,7 @@ export function tmdbToRankItem(movie: TMDbMovie): import('@/types').RankItem {
 export function tmdbTVToRankItem(show: TMDbTVShow): import('@/types').RankItem {
   return {
     id: `tmdb-tv-${show.id}`,
-    title: show.name,
+    title: decodeEntities(show.name),
     imageUrl: tmdbImage(show.poster_path),
     subtitle: show.first_air_date ? show.first_air_date.slice(0, 4) : undefined,
     metadata: {

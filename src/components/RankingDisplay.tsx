@@ -1,6 +1,14 @@
 import { motion } from 'framer-motion';
 import type { RankItem } from '@/types';
 
+/** Decode HTML entities that may be baked into older stored titles */
+function decode(text: string): string {
+  if (!text || (!text.includes('&') && !text.includes('<'))) return text;
+  const el = document.createElement('textarea');
+  el.innerHTML = text;
+  return el.value;
+}
+
 interface RankingDisplayProps {
   items: RankItem[];
 }
@@ -56,7 +64,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-white/75 text-[13px] truncate leading-tight">
-            {item.title}
+            {decode(item.title)}
           </p>
         </div>
       </>
@@ -198,7 +206,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                       letterSpacing: '-0.02em',
                     }}
                   >
-                    {first.title}
+                    {decode(first.title)}
                   </h3>
 
                   {/* Subtitle */}
@@ -259,7 +267,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   Runner-Up
                 </p>
                 <p className="font-bold text-white/90 text-sm sm:text-base leading-snug line-clamp-3">
-                  {second.title}
+                  {decode(second.title)}
                 </p>
                 {second.subtitle && (
                   <p className="text-white/35 text-[11px] sm:text-xs">{second.subtitle}</p>
@@ -307,7 +315,7 @@ export function RankingDisplay({ items }: RankingDisplayProps) {
                   3rd Place
                 </p>
                 <p className="font-bold text-white/90 text-sm sm:text-base leading-snug line-clamp-3">
-                  {third.title}
+                  {decode(third.title)}
                 </p>
                 {third.subtitle && (
                   <p className="text-white/35 text-[11px] sm:text-xs">{third.subtitle}</p>

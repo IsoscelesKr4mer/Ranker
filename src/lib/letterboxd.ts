@@ -2,6 +2,12 @@ import type { RankItem } from '@/types';
 
 const PROXY_URL = import.meta.env.VITE_LETTERBOXD_PROXY_URL || '/api/letterboxd';
 
+function decodeEntities(text: string): string {
+  const el = document.createElement('textarea');
+  el.innerHTML = text;
+  return el.value;
+}
+
 export function parseLetterboxdUrl(url: string): { username?: string; listSlug?: string; type: 'list' | 'watchlist' | 'films' | 'unknown' } {
   try {
     const parsed = new URL(url);
@@ -42,7 +48,7 @@ export async function importLetterboxdList(url: string): Promise<RankItem[]> {
 
   return data.films.map((film: { slug: string; title: string; posterUrl: string | null; year: string | null }, index: number) => ({
     id: `lb-${film.slug || index}`,
-    title: film.title,
+    title: decodeEntities(film.title),
     imageUrl: film.posterUrl,
     subtitle: film.year || undefined,
     metadata: { letterboxdSlug: film.slug, source: 'letterboxd' },
